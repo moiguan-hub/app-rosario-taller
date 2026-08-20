@@ -1,12 +1,14 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
-# Declarar variables como argumentos de compilación
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
 
-# Convertirlas en variables de entorno para que Vite las pueda leer
+# Declarar variables como argumentos de compilacion con valor por defecto
+ARG VITE_SUPABASE_URL=""
+ARG VITE_SUPABASE_ANON_KEY=""
+
+# Convertirlas en variables de entorno para que Vite las lea al hacer el build
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
 COPY package*.json ./
 RUN npm install
 COPY . .
