@@ -8,32 +8,20 @@ steps:
     'build',
     '--build-arg', 'VITE_SUPABASE_URL=$_VITE_SUPABASE_URL',
     '--build-arg', 'VITE_SUPABASE_ANON_KEY=$_VITE_SUPABASE_ANON_KEY',
-    '-t', 'gcr.io/$PROJECT_ID/apppreciosluz:$COMMIT_SHA',
+    '-t', 'gcr.io/$PROJECT_ID/app-rosario-taller:$COMMIT_SHA',
     '.'
   ]
 
-# Paso 2: Empujar la imagen al registro de Google
+# Paso 2: Empujar la imagen
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['push', 'gcr.io/$PROJECT_ID/apppreciosluz:$COMMIT_SHA']
+  args: ['push', 'gcr.io/$PROJECT_ID/app-rosario-taller:$COMMIT_SHA']
 
 # Paso 3: Desplegar en Cloud Run
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: gcloud
   args: [
-    'run', 'deploy', 'apppreciosluz',
-    '--image', 'gcr.io/$PROJECT_ID/apppreciosluz:$COMMIT_SHA',
-    '--region', 'europe-southwest1',
-    '--platform', 'managed',
+    'run', 'deploy', 'app-rosario-taller',
+    '--image', 'gcr.io/$PROJECT_ID/app-rosario-taller:$COMMIT_SHA',
+    '--region', 'europe-west1',
     '--allow-unauthenticated'
   ]
-
-# Paso 4: Desplegar Edge Function a Supabase
-- name: 'node:20'
-  entrypoint: 'npx'
-  args: [
-    'supabase', 'functions', 'deploy', 'pvpc-prices', 
-    '--project-ref', '$_SUPABASE_PROJECT_ID',
-    '--no-verify-jwt'
-  ]
-  env:
-    - 'SUPABASE_ACCESS_TOKEN=$_SUPABASE_ACCESS_TOKEN'
