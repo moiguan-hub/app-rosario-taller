@@ -1,11 +1,10 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 
-# Declarar variables como argumentos de compilacion con valor por defecto
-ARG VITE_SUPABASE_URL=""
-ARG VITE_SUPABASE_ANON_KEY=""
+# Inyectar las claves reales directamente para que Vite las lea durante el build
+ARG VITE_SUPABASE_URL="https://jjkubwujipqpjktqnvib.supabase.co"
+ARG VITE_SUPABASE_ANON_KEY="sb_publishable_y3Yef1H270ba5Xk07B3RjA_jum6zW_w"
 
-# Convertirlas en variables de entorno para que Vite las lea al hacer el build
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 
