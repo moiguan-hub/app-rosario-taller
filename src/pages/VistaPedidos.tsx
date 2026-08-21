@@ -200,18 +200,18 @@ export function VistaPedidos() {
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-3xl mx-auto min-h-[60vh]">
-      <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 border-b border-gray-100 pb-4 gap-4">
         <div className="flex items-center">
-          <button onClick={handleAtras} className="p-2 mr-2 bg-gray-50 rounded-full hover:bg-rose-50 hover:text-rose-600 text-gray-500 transition-colors"><ArrowLeft size={24} /></button>
+          <button onClick={handleAtras} className="p-2 mr-2 bg-gray-50 rounded-full hover:bg-rose-50 hover:text-rose-600 text-gray-500 transition-colors shrink-0"><ArrowLeft size={24} /></button>
           {((paso === 1 && clienteSeleccionado) || (paso === 2 && pedidoSeleccionado)) && (
-            <button onClick={handleAdelante} className="p-2 mr-4 bg-gray-50 rounded-full hover:bg-rose-50 hover:text-rose-600 text-gray-500 transition-colors"><ArrowRight size={24} /></button>
+            <button onClick={handleAdelante} className="p-2 mr-2 bg-gray-50 rounded-full hover:bg-rose-50 hover:text-rose-600 text-gray-500 transition-colors shrink-0"><ArrowRight size={24} /></button>
           )}
-          <h2 className="text-2xl font-bold text-gray-800 ml-2">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-800 ml-1 leading-tight">
             <span>{paso === 1 ? 'Buscar' : paso === 2 ? 'Pedidos del Cliente' : clienteSeleccionado ? `Pedido de ${clienteSeleccionado.nombre} ${clienteSeleccionado.apellidos}` : 'Detalle del Pedido'}</span>
           </h2>
         </div>
         {paso === 3 && (clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono) && (
-          <a href={`tel:${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}`} onClick={(e) => { if(!window.confirm(`¿Llamar al cliente al número ${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}?`)) e.preventDefault(); }} className="flex items-center px-4 py-2 bg-green-100 text-green-700 hover:bg-green-200 rounded-xl text-lg font-bold transition-colors shadow-sm">
+          <a href={`tel:${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}`} onClick={(e) => { if(!window.confirm(`¿Llamar al cliente al número ${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}?`)) e.preventDefault(); }} className="flex items-center justify-center w-full md:w-auto px-4 py-2 bg-green-100 text-green-700 hover:bg-green-200 rounded-xl text-lg font-bold transition-colors shadow-sm shrink-0">
             <Phone size={24} className="mr-2" /> Llamar
           </a>
         )}
@@ -259,8 +259,8 @@ export function VistaPedidos() {
 
       {paso === 3 && pedidoSeleccionado && (
         <div className="space-y-6 animate-fadeIn">
-          <div className="border-b-2 border-gray-100 pb-4 flex justify-between items-start">
-            <div className="w-full pr-4">
+          <div className="border-b-2 border-gray-100 pb-4 flex flex-col md:flex-row justify-between items-start gap-4">
+            <div className="w-full md:pr-4">
               {isEditing ? (
                 <>
                   <input type="text" className="text-2xl font-black text-gray-800 border-b-2 border-rose-300 outline-none w-full mb-1" value={editForm.descripcion} onChange={e => setEditForm({...editForm, descripcion: e.target.value})} placeholder="Descripción del pedido..." />

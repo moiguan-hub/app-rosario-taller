@@ -9,12 +9,12 @@ function App() {
     <Router>
       <div className="min-h-screen bg-gray-50 text-gray-900">
         <header className="bg-white shadow-sm sticky top-0 z-10">
-          <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-xl font-bold text-rose-600">APP Rosario</h1>
-            <nav className="space-x-4">
-              <a href="/" className="text-sm font-medium text-gray-600 hover:text-rose-600">Inicio</a>
-              <a href="/pedidos" onClick={() => { localStorage.removeItem('paso'); localStorage.removeItem('clienteId'); localStorage.removeItem('pedidoId'); }} className="text-sm font-medium text-gray-600 hover:text-rose-600">Consultas y Pedidos</a>
-              <a href="/clientes" className="text-sm font-medium text-gray-600 hover:text-rose-600">Clientes</a>
+          <div className="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3 text-center">
+            <h1 className="text-2xl font-black text-rose-600">APP Rosario</h1>
+            <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+              <a href="/" className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Inicio</a>
+              <a href="/pedidos" onClick={() => { localStorage.removeItem('paso'); localStorage.removeItem('clienteId'); localStorage.removeItem('pedidoId'); }} className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Consultas y Pedidos</a>
+              <a href="/clientes" className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Clientes</a>
             </nav>
           </div>
         </header>
