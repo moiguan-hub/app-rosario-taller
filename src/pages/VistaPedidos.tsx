@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Cliente, Pedido, Pago } from '../types/database.types';
 
@@ -17,7 +17,8 @@ export function VistaPedidos() {
   const [nuevoPago, setNuevoPago] = useState('');
   const [loadingPago, setLoadingPago] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', detalles_tejido: '', precio_total: '' });
+  const [editForm, setEditForm] = useState({ descripcion: '', fabricante: '', pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', detalles_tejido: '', precio_total: '' });
+  const [editPagos, setEditPagos] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
     const loadPersisted = async () => {
@@ -66,15 +67,24 @@ export function VistaPedidos() {
 
   useEffect(() => {
     const fetchTodos = async () => {
-      const { data } = await supabase.from('pedidos').select('*, clientes(nombre, apellidos)').order('created_at', { ascending: false });
-      if (data) setTodosLosPedidos(data);
+      const { data } = await supabase.from('pedidos').select('*, clientes(nombre, apellidos, telefono)');
+      if (data) {
+        const sortedData = data.sort((a, b) => {
+          const apA = (a.clientes?.apellidos || '').toLowerCase();
+          const apB = (b.clientes?.apellidos || '').toLowerCase();
+          return apA.localeCompare(apB);
+        });
+        setTodosLosPedidos(sortedData);
+      }
     };
     fetchTodos();
   }, []);
 
   const seleccionarPedidoDirecto = async (p: any) => {
     if (p.clientes) {
-      setClienteSeleccionado({ id: p.cliente_id, nombre: p.clientes.nombre, apellidos: p.clientes.apellidos } as Cliente);
+      setClienteSeleccionado({ id: p.cliente_id, nombre: p.clientes.nombre, apellidos: p.clientes.apellidos, telefono: p.clientes.telefono } as Cliente);
+      const { data: pData } = await supabase.from('pedidos').select('*').eq('cliente_id', p.cliente_id).order('created_at', { ascending: false });
+      setPedidos(pData || []);
     }
     setPedidoSeleccionado(p);
     setIsEditing(false);
@@ -116,11 +126,16 @@ export function VistaPedidos() {
   const iniciarEdicion = () => {
     if (!pedidoSeleccionado) return;
     setEditForm({
+      descripcion: pedidoSeleccionado.descripcion || (pedidoSeleccionado.detalles_tejido && pedidoSeleccionado.detalles_tejido.split(' | ')[0]) || '',
+      fabricante: pedidoSeleccionado.fabricante || '',
       pecho: pedidoSeleccionado.medidas?.pecho || '', cintura: pedidoSeleccionado.medidas?.cintura || '',
       cadera: pedidoSeleccionado.medidas?.cadera || '', manga: pedidoSeleccionado.medidas?.manga || '',
       talle: pedidoSeleccionado.medidas?.talle || '', largo_total: pedidoSeleccionado.medidas?.largo_total || '',
-      detalles_tejido: pedidoSeleccionado.detalles_tejido || '', precio_total: pedidoSeleccionado.precio_total.toString()
+      detalles_tejido: getObs(pedidoSeleccionado), precio_total: pedidoSeleccionado.precio_total.toString()
     });
+    const pMap: any = {};
+    pagos.forEach(p => pMap[p.id] = p.monto_entrega_cuenta.toString());
+    setEditPagos(pMap);
     setIsEditing(true);
   };
 
@@ -129,9 +144,21 @@ export function VistaPedidos() {
     if (!window.confirm("¡Atención! Vas a modificar los datos de este pedido. ¿Confirmas los cambios?")) return;
     const upMed = { ...pedidoSeleccionado.medidas, pecho: editForm.pecho, cintura: editForm.cintura, cadera: editForm.cadera, manga: editForm.manga, talle: editForm.talle, largo_total: editForm.largo_total };
     const upPrecio = parseFloat(editForm.precio_total) || 0;
-    const { error } = await supabase.from('pedidos').update({ medidas: upMed, detalles_tejido: editForm.detalles_tejido, precio_total: upPrecio }).eq('id', pedidoSeleccionado.id);
+    const combinedDetalles = editForm.descripcion + (editForm.detalles_tejido ? ' | ' + editForm.detalles_tejido : '');
+    const { error } = await supabase.from('pedidos').update({ fabricante: editForm.fabricante, medidas: upMed, detalles_tejido: combinedDetalles, precio_total: upPrecio }).eq('id', pedidoSeleccionado.id);
+    
+    // Update pagos
+    for (const p of pagos) {
+      const newVal = parseFloat(editPagos[p.id]);
+      if (!isNaN(newVal) && newVal !== Number(p.monto_entrega_cuenta)) {
+        await supabase.from('pagos').update({ monto_entrega_cuenta: newVal }).eq('id', p.id);
+      }
+    }
+    const { data: updatedPagos } = await supabase.from('pagos').select('*').eq('pedido_id', pedidoSeleccionado.id).order('fecha', { ascending: true });
+    if (updatedPagos) setPagos(updatedPagos);
+
     if (!error) {
-      const pNew = { ...pedidoSeleccionado, medidas: upMed, detalles_tejido: editForm.detalles_tejido, precio_total: upPrecio };
+      const pNew = { ...pedidoSeleccionado, descripcion: editForm.descripcion, fabricante: editForm.fabricante, medidas: upMed, detalles_tejido: combinedDetalles, precio_total: upPrecio };
       setPedidoSeleccionado(pNew);
       setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
       setIsEditing(false);
@@ -142,6 +169,7 @@ export function VistaPedidos() {
   const guardarNuevoPago = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pedidoSeleccionado || !nuevoPago || parseFloat(nuevoPago) <= 0) return;
+    if (!window.confirm(`¿Confirmas que deseas añadir un abono de ${nuevoPago} € a este pedido?`)) return;
     setLoadingPago(true);
     try {
       const { data, error } = await supabase.from('pagos').insert([{ pedido_id: pedidoSeleccionado.id, monto_entrega_cuenta: parseFloat(nuevoPago), fecha: new Date().toISOString().split('T')[0] }]).select().single();
@@ -172,12 +200,21 @@ export function VistaPedidos() {
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-3xl mx-auto min-h-[60vh]">
-      <div className="flex items-center mb-8 border-b border-gray-100 pb-4">
-        <button onClick={handleAtras} className="p-2 mr-2 bg-gray-50 rounded-full hover:bg-rose-50 hover:text-rose-600 text-gray-500 transition-colors"><ArrowLeft size={24} /></button>
-        {((paso === 1 && clienteSeleccionado) || (paso === 2 && pedidoSeleccionado)) && (
-          <button onClick={handleAdelante} className="p-2 mr-4 bg-gray-50 rounded-full hover:bg-rose-50 hover:text-rose-600 text-gray-500 transition-colors"><ArrowRight size={24} /></button>
+      <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
+        <div className="flex items-center">
+          <button onClick={handleAtras} className="p-2 mr-2 bg-gray-50 rounded-full hover:bg-rose-50 hover:text-rose-600 text-gray-500 transition-colors"><ArrowLeft size={24} /></button>
+          {((paso === 1 && clienteSeleccionado) || (paso === 2 && pedidoSeleccionado)) && (
+            <button onClick={handleAdelante} className="p-2 mr-4 bg-gray-50 rounded-full hover:bg-rose-50 hover:text-rose-600 text-gray-500 transition-colors"><ArrowRight size={24} /></button>
+          )}
+          <h2 className="text-2xl font-bold text-gray-800 ml-2">
+            <span>{paso === 1 ? 'Buscar' : paso === 2 ? 'Pedidos del Cliente' : clienteSeleccionado ? `Pedido de ${clienteSeleccionado.nombre} ${clienteSeleccionado.apellidos}` : 'Detalle del Pedido'}</span>
+          </h2>
+        </div>
+        {paso === 3 && (clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono) && (
+          <a href={`tel:${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}`} onClick={(e) => { if(!window.confirm(`¿Llamar al cliente al número ${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}?`)) e.preventDefault(); }} className="flex items-center px-4 py-2 bg-green-100 text-green-700 hover:bg-green-200 rounded-xl text-lg font-bold transition-colors shadow-sm">
+            <Phone size={24} className="mr-2" /> Llamar
+          </a>
         )}
-        <h2 className="text-2xl font-bold text-gray-800 ml-2">{paso === 1 ? 'Buscar Cliente' : paso === 2 ? 'Pedidos del Cliente' : 'Detalle del Pedido'}</h2>
       </div>
 
       {paso === 1 && (
@@ -194,10 +231,15 @@ export function VistaPedidos() {
                     <div className="flex items-center">
                       <FileText className="text-rose-400 mr-4" size={28} />
                       <div>
-                        <p className="font-bold text-gray-800 text-lg">{p.clientes?.nombre} {p.clientes?.apellidos}</p>
-                        <p className="text-sm text-gray-600 font-medium">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || p.categoria}</p>
-                        <p className="text-xs text-gray-500 font-mono mt-1">Fabricante: {p.fabricante}</p>
+                        <p className="font-bold text-gray-800 text-lg">{(p as any).clientes?.apellidos?.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase())}, {(p as any).clientes?.nombre?.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase())}</p>
+                        <p className="text-lg text-gray-600 font-medium">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || p.categoria}</p>
+                        <p className="text-base text-gray-500 mt-1">Fabricante: {p.fabricante || 'Sin especificar'}</p>
                       </div>
+                    </div>
+                    <div>
+                      <span className={`text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -211,15 +253,36 @@ export function VistaPedidos() {
         <div className="space-y-6 animate-fadeIn">
           <div className="bg-gray-900 p-4 rounded-xl shadow-md text-white"><p className="text-xs text-gray-400 font-semibold uppercase mb-1">Cliente</p><p className="font-bold text-xl">{clienteSeleccionado.nombre} {clienteSeleccionado.apellidos}</p></div>
           <h3 className="font-bold text-gray-700 uppercase text-sm border-b pb-2">Historial ({pedidos.length})</h3>
-          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex justify-between items-center"><div className="flex items-center"><FileText className="text-rose-400 mr-4" size={28} /><div><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-xs text-gray-500 font-medium mt-1">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Sin descripción'} | {p.fecha_pedido}</p></div></div><div><span className={`text-xs font-bold px-3 py-1 rounded-full ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span></div></div>))}</div>
+          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex justify-between items-center"><div className="flex items-center"><FileText className="text-rose-400 mr-4" size={28} /><div><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Sin descripción'}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido} | Fabricante: {p.fabricante || 'Sin especificar'}</p></div></div><div><span className={`text-xs font-bold px-3 py-1 rounded-full ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span></div></div>))}</div>
         </div>
       )}
 
       {paso === 3 && pedidoSeleccionado && (
         <div className="space-y-6 animate-fadeIn">
           <div className="border-b-2 border-gray-100 pb-4 flex justify-between items-start">
-            <div><h3 className="text-2xl font-black text-gray-800">{getDesc(pedidoSeleccionado)}</h3><p className="text-gray-500 font-medium">{pedidoSeleccionado.categoria} | Pedido el {pedidoSeleccionado.fecha_pedido}</p></div>
-            <button onClick={toggleEstadoUbicacion} className={`flex items-center px-4 py-2 rounded-xl font-bold shadow-md transition-colors ${pedidoSeleccionado.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200' : 'bg-gray-900 text-white hover:bg-gray-800'}`}>
+            <div className="w-full pr-4">
+              {isEditing ? (
+                <>
+                  <input type="text" className="text-2xl font-black text-gray-800 border-b-2 border-rose-300 outline-none w-full mb-1" value={editForm.descripcion} onChange={e => setEditForm({...editForm, descripcion: e.target.value})} placeholder="Descripción del pedido..." />
+                  <div className="flex items-center text-gray-500 font-medium mt-2">
+                    <span className="mr-2">{pedidoSeleccionado.categoria} | Pedido el {pedidoSeleccionado.fecha_pedido} | Fabricante: </span>
+                    <select className="border-b-2 border-rose-300 outline-none bg-transparent" value={editForm.fabricante} onChange={e => setEditForm({...editForm, fabricante: e.target.value})}>
+                      <option value="">Sin especificar</option>
+                      <option value="Ana Barroso">Ana Barroso</option>
+                      <option value="Aires de Ferias">Aires de Ferias</option>
+                      <option value="Carmen Moda">Carmen Moda</option>
+                      <option value="OTRO">Otro...</option>
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-2xl font-black text-gray-800">{getDesc(pedidoSeleccionado)}</h3>
+                  <p className="text-gray-500 font-medium">{pedidoSeleccionado.categoria} | Pedido el {pedidoSeleccionado.fecha_pedido}{pedidoSeleccionado.fabricante ? ` | Fabricante: ${pedidoSeleccionado.fabricante}` : ''}</p>
+                </>
+              )}
+            </div>
+            <button onClick={toggleEstadoUbicacion} className={`flex-shrink-0 flex items-center px-4 py-2 rounded-xl font-bold shadow-md transition-colors ${pedidoSeleccionado.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200' : 'bg-gray-900 text-white hover:bg-gray-800'}`}>
               {pedidoSeleccionado.estado_ubicacion === 'STOCK' ? <><CheckCircle size={20} className="mr-2" /> EN TIENDA</> : <><Factory size={20} className="mr-2" /> FÁBRICA</>}
             </button>
           </div>
@@ -238,17 +301,17 @@ export function VistaPedidos() {
             </div>
             
             <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-              {['pecho', 'cintura', 'cadera', 'manga', 'talle', 'largo_total'].map(m => (
+              {['pecho', 'cintura', 'cadera', 'manga', 'talle', 'largo_total'].map((m: string) => (
                 <div key={m} className="bg-gray-50 border border-gray-100 p-2 rounded-xl text-center flex flex-col items-center">
-                  <p className="text-[10px] font-bold text-gray-500 uppercase w-full">{m.replace('_', ' ')}</p>
-                  {isEditing ? <input type="number" inputMode="decimal" className="w-full text-center mt-1 p-1 border rounded font-bold text-gray-800 outline-none focus:border-rose-300" value={(editForm as any)[m]} onChange={e => setEditForm({...editForm, [m]: e.target.value})} /> : <p className="text-lg font-black text-gray-800">{pedidoSeleccionado.medidas?.[m] || '-'}</p>}
+                  <p className="text-xs md:text-sm font-bold text-gray-500 uppercase w-full">{m.replace('_', ' ')}</p>
+                  {isEditing ? <input type="number" inputMode="decimal" className="w-full text-center mt-1 p-1 border rounded font-bold text-gray-800 outline-none focus:border-rose-300 text-xl" value={(editForm as any)[m]} onChange={e => setEditForm({...editForm, [m]: e.target.value})} /> : <p className="text-2xl md:text-3xl font-black text-gray-800">{pedidoSeleccionado.medidas?.[m] || '-'}</p>}
                 </div>
               ))}
             </div>
             {isEditing ? (
-              <textarea className="mt-4 w-full p-3 border rounded-xl text-sm text-gray-700 outline-none focus:border-rose-300 h-24" value={editForm.detalles_tejido} onChange={e => setEditForm({...editForm, detalles_tejido: e.target.value})} placeholder="Observaciones..."></textarea>
+              <textarea className="mt-4 w-full p-3 border rounded-xl text-xl md:text-2xl font-normal text-gray-800 outline-none focus:border-rose-300 h-32" value={editForm.detalles_tejido} onChange={e => setEditForm({...editForm, detalles_tejido: e.target.value})} placeholder="Observaciones..."></textarea>
             ) : getObs(pedidoSeleccionado) ? (
-              <div className="mt-4 bg-gray-50 p-4 rounded-xl text-sm text-gray-700 border border-gray-100"><span className="font-bold block mb-1">Observaciones:</span>{getObs(pedidoSeleccionado)}</div>
+              <div className="mt-4 bg-gray-50 p-4 rounded-xl border border-gray-100"><span className="text-xs md:text-sm font-bold text-gray-500 uppercase block mb-1">Observaciones</span><p className="text-xl md:text-2xl font-normal text-gray-800">{getObs(pedidoSeleccionado)}</p></div>
             ) : null}
           </div>
 
@@ -260,7 +323,7 @@ export function VistaPedidos() {
             </div>
             <div className="border-t border-rose-200 pt-3">
               <p className="text-xs font-bold text-rose-600 uppercase mb-2">Entregas a cuenta:</p>
-              {pagos.length === 0 ? <p className="text-sm text-gray-500 italic">Sin pagos registrados.</p> : pagos.map((p, i) => <div key={p.id} className="flex justify-between items-center text-sm bg-white p-2 rounded-lg border border-rose-100 mb-2"><span className="text-gray-500">#{i + 1} - {p.fecha}</span><span className="font-bold text-green-600">+{Number(p.monto_entrega_cuenta).toFixed(2)} €</span></div>)}
+              {pagos.length === 0 ? <p className="text-sm text-gray-500 italic">Sin pagos registrados.</p> : pagos.map((p, i) => <div key={p.id} className="flex justify-between items-center text-sm bg-white p-2 rounded-lg border border-rose-100 mb-2"><span className="text-gray-500">#{i + 1} - {p.fecha}</span>{isEditing ? <input type="number" step="0.01" className="p-1 border border-rose-200 rounded outline-none text-right font-bold focus:border-rose-500 w-24" value={editPagos[p.id] || ''} onChange={e => setEditPagos({...editPagos, [p.id]: e.target.value})} /> : <span className="font-bold text-green-600">+{Number(p.monto_entrega_cuenta).toFixed(2)} €</span>}</div>)}
             </div>
             <div className="flex justify-between items-center pt-3 border-t-2 border-rose-200 mt-4"><span className="font-black text-rose-900 uppercase">Restante:</span><span className="text-3xl font-black text-rose-600">{restante.toFixed(2)} €</span></div>
             {restante > 0 && (

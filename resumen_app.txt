@@ -1,0 +1,55 @@
+# Resumen Técnico - APP Rosario
+
+## 1. Descripción General
+"APP Rosario" es una aplicación web diseñada para la gestión integral de una tienda o taller de moda (especializado en trajes de flamenca, comunión, etc.). Permite dar de alta clientes, registrar pedidos con medidas personalizadas y fabricantes, además de llevar un control económico de pagos y entregas a cuenta.
+
+## 2. Tecnologías Utilizadas
+- **Frontend**: React 18 (con hooks funcionales), TypeScript, Vite.
+- **Enrutamiento**: React Router DOM v7.
+- **Estilos e UI**: Tailwind CSS, iconos mediante Lucide React.
+- **Backend / BBDD**: Supabase (PostgreSQL).
+
+## 3. Esquema de Base de Datos (Supabase)
+La base de datos utiliza PostgreSQL y se estructura con los siguientes tipos y tablas:
+
+### ENUMS
+- `categoria_pedido`: 'FLAMENCA', 'COMUNION', 'OTRO'
+- `estado_ubicacion_pedido`: 'PEDIDO', 'STOCK'
+- `estado_proceso_pedido`: 'PENDIENTE_LLEGADA', 'EN_PRUEBAS', 'EN_ARREGLOS', 'LISTO', 'ENTREGADO'
+
+### Tablas Principales
+- **clientes**: `id` (UUID), `apellidos`, `nombre`, `telefono`, `direccion`, `created_at`.
+- **pedidos**: `id` (UUID), `cliente_id` (Relación), `categoria`, `estado_ubicacion`, `estado_proceso`, `fabricante`, `fecha_pedido`, `medidas` (JSONB: pecho, cintura, cadera, manga, talle, largo_total), `detalles_tejido` (texto/descripción), `precio_total`, `foto_ficha_url`, `qr_code`.
+- **pagos**: `id` (UUID), `pedido_id` (Relación), `monto_entrega_cuenta`, `fecha`, `metodo`.
+
+## 4. Flujo de Navegación y Vistas (Páginas)
+La app se divide en las siguientes rutas y componentes principales en `src/pages`:
+
+### A) Inicio (`/` - `Home.tsx`)
+Ofrece un menú rápido para:
+- Crear un Nuevo Pedido.
+- Buscar Cliente / Consultar base de datos.
+- Leer código QR (Actualmente como interfaz UI, lógica pendiente).
+
+### B) Nuevo Pedido (`/nuevo-pedido` - `NuevoPedido.tsx`)
+Funciona como un asistente de 2 pasos:
+1. **Paso 1 (Cliente)**: Permite buscar en tiempo real (por nombre, apellido o teléfono) un cliente existente, o bien introducir los datos para dar de alta un cliente nuevo.
+2. **Paso 2 (Detalles del Pedido)**: 
+   - Se introduce descripción, categoría, fecha y fabricante (ej. Ana Barroso, Aires de Ferias, Carmen Moda).
+   - Cuadrícula para introducir medidas (pecho, cintura, cadera, etc.).
+   - Observaciones/Detalles de tejido.
+   - Control Económico: Precio total y una primera "Entrega a cuenta" (generará el primer registro en la tabla de pagos).
+
+### C) Vista / Gestión de Pedidos (`/pedidos` - `VistaPedidos.tsx`)
+Sistema persistente con `localStorage` en 3 pasos para no perder el hilo al recargar:
+1. **Paso 1 (Búsqueda)**: Buscador general de clientes y un listado global de todos los pedidos históricos.
+2. **Paso 2 (Pedidos del Cliente)**: Si se selecciona un cliente, se listan todos sus pedidos como tarjetas resumidas.
+3. **Paso 3 (Ficha del Pedido)**: 
+   - Muestra el estado del pedido, el cual se puede cambiar (estado ubicación y proceso).
+   - Muestra las medidas y observaciones. Posee un modo edición (`isEditing`) para actualizar precios, medidas y descripciones sobre la marcha.
+   - **Control Económico**: Muestra el histórico de pagos (entregas a cuenta) calculando el restante de forma dinámica. Permite añadir nuevos pagos parciales descontándolo del precio total.
+
+## 5. Lógica de Persistencia y Notas para Continuar el Desarrollo
+- La aplicación se apoya fuertemente en el estado de React (useState) y las llamadas a Supabase mediante su cliente asíncrono.
+- La pantalla de `VistaPedidos` guarda identificadores en `localStorage` (`paso`, `clienteId`, `pedidoId`) para recordar en qué vista o cliente se quedó el usuario.
+- Futuras mejoras podrían incluir: Integración real del escaneo QR, autenticación si se requiere roles, o subida de la `foto_ficha_url` a un Storage de Supabase.

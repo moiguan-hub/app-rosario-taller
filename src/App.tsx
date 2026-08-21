@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Home } from './pages/Home';
 import { NuevoPedido } from './pages/NuevoPedido';
 import { VistaPedidos } from './pages/VistaPedidos';
+import { VistaClientes } from './pages/VistaClientes';
 
 function App() {
   return (
@@ -12,7 +13,8 @@ function App() {
             <h1 className="text-xl font-bold text-rose-600">APP Rosario</h1>
             <nav className="space-x-4">
               <a href="/" className="text-sm font-medium text-gray-600 hover:text-rose-600">Inicio</a>
-              <a href="/pedidos" className="text-sm font-medium text-gray-600 hover:text-rose-600">Consultas y Pedidos</a>
+              <a href="/pedidos" onClick={() => { localStorage.removeItem('paso'); localStorage.removeItem('clienteId'); localStorage.removeItem('pedidoId'); }} className="text-sm font-medium text-gray-600 hover:text-rose-600">Consultas y Pedidos</a>
+              <a href="/clientes" className="text-sm font-medium text-gray-600 hover:text-rose-600">Clientes</a>
             </nav>
           </div>
         </header>
@@ -22,6 +24,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/nuevo-pedido" element={<NuevoPedido />} />
             <Route path="/pedidos" element={<VistaPedidos />} />
+            <Route path="/clientes" element={<VistaClientes />} />
           </Routes>
         </main>
       </div>
