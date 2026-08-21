@@ -227,17 +227,13 @@ export function VistaPedidos() {
               <h3 className="font-bold text-gray-700 uppercase tracking-wide text-sm mb-4">Todos los Pedidos ({todosLosPedidos.length})</h3>
               <div className="space-y-3">
                 {todosLosPedidos.map(p => (
-                  <div key={p.id} onClick={() => seleccionarPedidoDirecto(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex justify-between items-center bg-white shadow-sm">
-                    <div className="flex items-center">
-                      <FileText className="text-rose-400 mr-4" size={28} />
-                      <div>
-                        <p className="font-bold text-gray-800 text-lg">{(p as any).clientes?.apellidos?.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase())}, {(p as any).clientes?.nombre?.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase())}</p>
-                        <p className="text-lg text-gray-600 font-medium">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || p.categoria}</p>
-                        <p className="text-base text-gray-500 mt-1">Fabricante: {p.fabricante || 'Sin especificar'}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <span className={`text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                  <div key={p.id} onClick={() => seleccionarPedidoDirecto(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-start bg-white shadow-sm">
+                    <FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} />
+                    <div className="flex-1 w-full min-w-0">
+                      <p className="font-bold text-gray-800 text-lg break-words">{(p as any).clientes?.apellidos?.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase())}, {(p as any).clientes?.nombre?.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase())}</p>
+                      <p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || p.categoria}</p>
+                      <p className="text-base text-gray-500 mt-1 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p>
+                      <span className={`inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                         {p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}
                       </span>
                     </div>
@@ -253,7 +249,7 @@ export function VistaPedidos() {
         <div className="space-y-6 animate-fadeIn">
           <div className="bg-gray-900 p-4 rounded-xl shadow-md text-white"><p className="text-xs text-gray-400 font-semibold uppercase mb-1">Cliente</p><p className="font-bold text-xl">{clienteSeleccionado.nombre} {clienteSeleccionado.apellidos}</p></div>
           <h3 className="font-bold text-gray-700 uppercase text-sm border-b pb-2">Historial ({pedidos.length})</h3>
-          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex justify-between items-center"><div className="flex items-center"><FileText className="text-rose-400 mr-4" size={28} /><div><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Sin descripción'}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido} | Fabricante: {p.fabricante || 'Sin especificar'}</p></div></div><div><span className={`text-xs font-bold px-3 py-1 rounded-full ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span></div></div>))}</div>
+          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-start bg-white shadow-sm"><FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} /><div className="flex-1 w-full min-w-0"><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Sin descripción'}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p><p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p><span className={`inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span></div></div>))}</div>
         </div>
       )}
 
