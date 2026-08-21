@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Cliente, Pedido, Pago } from '../types/database.types';
 
@@ -211,9 +211,14 @@ export function VistaPedidos() {
           </h2>
         </div>
         {paso === 3 && (clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono) && (
-          <a href={`tel:${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}`} onClick={(e) => { if(!window.confirm(`¿Llamar al cliente al número ${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}?`)) e.preventDefault(); }} className="flex items-center justify-center w-full md:w-auto px-4 py-2 bg-green-100 text-green-700 hover:bg-green-200 rounded-xl text-lg font-bold transition-colors shadow-sm shrink-0">
-            <Phone size={24} className="mr-2" /> Llamar
-          </a>
+          <div className="flex flex-col gap-2 w-full md:w-auto shrink-0 mt-3 md:mt-0">
+            <a href={`tel:${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}`} onClick={(e) => { if(!window.confirm(`¿Llamar al cliente al número ${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}?`)) e.preventDefault(); }} className="flex items-center justify-center w-full px-4 py-2 bg-green-100 text-green-700 hover:bg-green-200 rounded-xl text-lg font-bold transition-colors shadow-sm">
+              <Phone size={24} className="mr-2" /> Llamar
+            </a>
+            <a href={`https://wa.me/34${(clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center w-full px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-2 border-emerald-100 rounded-xl text-lg font-bold transition-colors shadow-sm">
+              <MessageCircle size={24} className="mr-2" /> WhatsApp
+            </a>
+          </div>
         )}
       </div>
 
