@@ -2,8 +2,8 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 # Inyectar las claves reales directamente para que Vite las lea durante el build
-ARG VITE_SUPABASE_URL="https://jjkubwujipqpjktqnvib.supabase.co"
-ARG VITE_SUPABASE_ANON_KEY="sb_publishable_y3Yef1H270ba5Xk07B3RjA_jum6zW_w"
+ARG _VITE_SUPABASE_URL="https://jjkubwujipqpjktqnvib.supabase.co"
+ARG _VITE_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impqa3Vid3VqaXBxanBrdHFudmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMzUxNjEsImV4cCI6MjEwMjgxMTE2MX0.anOVr6-C2Y9fw2oz7s0LYI8Z6q-bI9MbHP9wES8cgDg"
 
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
