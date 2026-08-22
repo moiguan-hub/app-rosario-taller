@@ -21,7 +21,7 @@ export function VistaClientes() {
   const fetchClientes = async () => {
     let q = supabase.from('clientes').select('*').order('apellidos', { ascending: true });
     if (busqueda.length > 1) {
-      q = q.or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%`);
+      q = q.or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%,telefono2.ilike.%${busqueda}%,contacto2.ilike.%${busqueda}%`);
     }
     const { data } = await q;
     if (data) setClientes(data);
@@ -39,6 +39,8 @@ export function VistaClientes() {
       nombre: editForm.nombre?.replace(/(^\w|\s\w)/g, m => m.toUpperCase()),
       apellidos: editForm.apellidos?.replace(/(^\w|\s\w)/g, m => m.toUpperCase()),
       telefono: editForm.telefono,
+      telefono2: editForm.telefono2 || null,
+      contacto2: editForm.contacto2 || null,
       direccion: editForm.direccion
     }).eq('id', id);
     
@@ -99,18 +101,24 @@ export function VistaClientes() {
             <div key={c.id} className="border-2 border-gray-100 rounded-xl overflow-hidden transition-all">
               <div className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
                 {editandoId === c.id ? (
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <input type="text" className="p-2 border rounded" value={editForm.apellidos || ''} onChange={e => setEditForm({...editForm, apellidos: e.target.value})} placeholder="Apellidos" />
-                    <input type="text" className="p-2 border rounded" value={editForm.nombre || ''} onChange={e => setEditForm({...editForm, nombre: e.target.value})} placeholder="Nombre" />
-                    <input type="tel" className="p-2 border rounded" value={editForm.telefono || ''} onChange={e => setEditForm({...editForm, telefono: e.target.value})} placeholder="Teléfono" />
-                    <input type="text" className="p-2 border rounded" value={editForm.direccion || ''} onChange={e => setEditForm({...editForm, direccion: e.target.value})} placeholder="Dirección" />
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    <input type="text" className="p-2 border rounded text-sm" value={editForm.apellidos || ''} onChange={e => setEditForm({...editForm, apellidos: e.target.value})} placeholder="Apellidos" />
+                    <input type="text" className="p-2 border rounded text-sm" value={editForm.nombre || ''} onChange={e => setEditForm({...editForm, nombre: e.target.value})} placeholder="Nombre" />
+                    <input type="tel" className="p-2 border rounded text-sm" value={editForm.telefono || ''} onChange={e => setEditForm({...editForm, telefono: e.target.value})} placeholder="Teléfono Principal" />
+                    <input type="tel" className="p-2 border rounded text-sm" value={editForm.telefono2 || ''} onChange={e => setEditForm({...editForm, telefono2: e.target.value})} placeholder="Teléfono 2 (Opcional)" />
+                    <input type="text" className="p-2 border rounded text-sm" value={editForm.contacto2 || ''} onChange={e => setEditForm({...editForm, contacto2: e.target.value})} placeholder="Contacto 2 (Ej. Madre)" />
+                    <input type="text" className="p-2 border rounded text-sm" value={editForm.direccion || ''} onChange={e => setEditForm({...editForm, direccion: e.target.value})} placeholder="Dirección" />
                   </div>
                 ) : (
                   <div className="flex items-center cursor-pointer flex-1" onClick={() => toggleCliente(c)}>
-                    <div className="bg-rose-50 p-3 rounded-full mr-4 text-rose-500"><User size={24} /></div>
+                    <div className="bg-rose-50 p-3 rounded-full mr-4 text-rose-500 shrink-0"><User size={24} /></div>
                     <div>
                       <p className="font-bold text-gray-800 hover:text-rose-600 transition-colors">{c.apellidos?.replace(/(^\w|\s\w)/g, m => m.toUpperCase())}, {c.nombre?.replace(/(^\w|\s\w)/g, m => m.toUpperCase())}</p>
-                      <p className="text-sm text-gray-500">Tel: {c.telefono} {c.direccion ? `| Dir: ${c.direccion}` : ''}</p>
+                      <p className="text-sm text-gray-500">
+                        Tel: {c.telefono || '-'}
+                        {c.telefono2 ? ` | Tel 2: ${c.telefono2}${c.contacto2 ? ` (${c.contacto2})` : ''}` : ''}
+                        {c.direccion ? ` | Dir: ${c.direccion}` : ''}
+                      </p>
                     </div>
                   </div>
                 )}

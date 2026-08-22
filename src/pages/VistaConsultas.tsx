@@ -77,10 +77,10 @@ export function VistaConsultas() {
 
     if (busqueda.trim().length > 0) {
       const term = busqueda.toLowerCase();
-      const clienteNom = `${p.clientes?.nombre || ''} ${p.clientes?.apellidos || ''}`.toLowerCase();
+      const clienteInfo = `${p.clientes?.nombre || ''} ${p.clientes?.apellidos || ''} ${p.clientes?.telefono || ''} ${p.clientes?.telefono2 || ''} ${p.clientes?.contacto2 || ''}`.toLowerCase();
       const desc = getDesc(p).toLowerCase();
       const fab = (p.fabricante || '').toLowerCase();
-      if (!clienteNom.includes(term) && !desc.includes(term) && !fab.includes(term)) {
+      if (!clienteInfo.includes(term) && !desc.includes(term) && !fab.includes(term)) {
         return false;
       }
     }

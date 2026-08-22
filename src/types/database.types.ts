@@ -7,6 +7,8 @@ export interface Cliente {
   apellidos: string;
   nombre: string;
   telefono: string | null;
+  telefono2?: string | null;
+  contacto2?: string | null;
   direccion: string | null;
   created_at: string;
 }
@@ -22,6 +24,7 @@ export interface Pedido {
   estado_proceso: EstadoProceso;
   fabricante: string | null;
   fecha_pedido: string | null;
+  numero_talon?: string | null;
   medidas: any | null;
   detalles_tejido: string | null;
   precio_total: number;

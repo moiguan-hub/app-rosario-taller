@@ -15,7 +15,7 @@ export function NuevoPedido() {
   const [buscando, setBuscando] = useState(false);
   const [busquedaRealizada, setBusquedaRealizada] = useState(false);
 
-  const [nuevoCliente, setNuevoCliente] = useState({ apellidos: '', nombre: '', telefono: '', direccion: '' });
+  const [nuevoCliente, setNuevoCliente] = useState({ apellidos: '', nombre: '', telefono: '', telefono2: '', contacto2: '', direccion: '' });
   const [pedido, setPedido] = useState({
     descripcion: '',
     categoria: 'FLAMENCA' as CategoriaPedido,
@@ -58,7 +58,7 @@ export function NuevoPedido() {
       setBuscando(true);
       const { data } = await supabase.from('clientes')
         .select('*')
-        .or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%`)
+        .or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%,telefono2.ilike.%${busqueda}%,contacto2.ilike.%${busqueda}%`)
         .limit(5);
       if (data) setClientes(data);
       setBuscando(false);
@@ -333,7 +333,11 @@ export function NuevoPedido() {
                 {clientes.map(c => (
                   <div key={c.id} className="p-4 hover:bg-rose-50 cursor-pointer border-b border-gray-100 last:border-0" onClick={() => seleccionarCliente(c)}>
                     <p className="font-bold text-gray-800 text-lg">{c.apellidos}, {c.nombre}</p>
-                    <p className="text-sm text-gray-500">{c.telefono} {c.direccion ? `- ${c.direccion}` : ''}</p>
+                    <p className="text-sm text-gray-500">
+                      {c.telefono || ''}
+                      {c.telefono2 ? ` | Tel 2: ${c.telefono2}${c.contacto2 ? ` (${c.contacto2})` : ''}` : ''}
+                      {c.direccion ? ` - ${c.direccion}` : ''}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -356,7 +360,9 @@ export function NuevoPedido() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div><label className="text-xs font-bold text-rose-700 uppercase">Apellidos</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.apellidos} onChange={e => setNuevoCliente({...nuevoCliente, apellidos: e.target.value.replace(/(^\w|\s\w)/g, m => m.toUpperCase())})} /></div>
                 <div><label className="text-xs font-bold text-rose-700 uppercase">Nombre</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.nombre} onChange={e => setNuevoCliente({...nuevoCliente, nombre: e.target.value.replace(/(^\w|\s\w)/g, m => m.toUpperCase())})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.telefono} onChange={e => setNuevoCliente({...nuevoCliente, telefono: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono Principal</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.telefono} onChange={e => setNuevoCliente({...nuevoCliente, telefono: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono 2 (Opcional)</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.telefono2} onChange={e => setNuevoCliente({...nuevoCliente, telefono2: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Persona Contacto 2 (Opcional)</label><input type="text" placeholder="Ej. Madre, Juan..." className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white" value={nuevoCliente.contacto2} onChange={e => setNuevoCliente({...nuevoCliente, contacto2: e.target.value})} /></div>
                 <div><label className="text-xs font-bold text-rose-700 uppercase">Dirección</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.direccion} onChange={e => setNuevoCliente({...nuevoCliente, direccion: e.target.value})} /></div>
               </div>
               <button onClick={handleContinuar} disabled={loading} className="w-full mt-4 bg-rose-600 text-white p-4 rounded-xl font-bold text-lg hover:bg-rose-700 disabled:bg-rose-300">
@@ -373,7 +379,10 @@ export function NuevoPedido() {
             <div>
               <p className="text-xs text-gray-400 font-semibold uppercase mb-1">Cliente Asignado</p>
               <p className="font-bold text-white text-lg">{clienteSeleccionado ? `${clienteSeleccionado.nombre} ${clienteSeleccionado.apellidos}` : `${nuevoCliente.nombre} ${nuevoCliente.apellidos}`}</p>
-              <p className="text-gray-300 text-sm">Tel: {clienteSeleccionado ? clienteSeleccionado.telefono : nuevoCliente.telefono}</p>
+              <p className="text-gray-300 text-sm">
+                Tel: {clienteSeleccionado ? clienteSeleccionado.telefono : nuevoCliente.telefono}
+                {(clienteSeleccionado?.telefono2 || nuevoCliente.telefono2) && ` | Tel 2: ${clienteSeleccionado ? clienteSeleccionado.telefono2 : nuevoCliente.telefono2}${(clienteSeleccionado?.contacto2 || nuevoCliente.contacto2) ? ` (${clienteSeleccionado ? clienteSeleccionado.contacto2 : nuevoCliente.contacto2})` : ''}`}
+              </p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

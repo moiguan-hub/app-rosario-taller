@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone, MessageCircle, PackageCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone, MessageCircle, PackageCheck, Ticket } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Cliente, Pedido, Pago } from '../types/database.types';
 
@@ -18,7 +18,7 @@ export function VistaPedidos() {
   const [loadingPago, setLoadingPago] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
-    descripcion: '', fabricante: '', tipo_articulo: 'SENORA',
+    descripcion: '', fabricante: '', fecha_pedido: '', numero_talon: '', tipo_articulo: 'SENORA',
     pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', talla: '',
     numTejidos: 1, tejido1: '', tejido2: '', tejido3: '', tejidoCancan: '', colorCordoncillo: '',
     precioTraje: '', cargosExtra: [] as Array<{ concepto: string; precio: string }>,
@@ -28,6 +28,7 @@ export function VistaPedidos() {
   const [nuevoCargoPrecio, setNuevoCargoPrecio] = useState('');
   const [loadingCargo, setLoadingCargo] = useState(false);
   const [editPagos, setEditPagos] = useState<{[key: string]: string}>({});
+  const [modalContacto, setModalContacto] = useState<{ tipo: 'call' | 'wa', tel1: string, nom1: string, tel2: string, nom2: string } | null>(null);
 
   useEffect(() => {
     const loadPersisted = async () => {
@@ -67,7 +68,7 @@ export function VistaPedidos() {
     if (paso !== 1) return;
     const buscar = async () => {
       if (busqueda.length < 2) return setClientes([]);
-      const { data } = await supabase.from('clientes').select('*').or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%`).limit(10);
+      const { data } = await supabase.from('clientes').select('*').or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%,telefono2.ilike.%${busqueda}%,contacto2.ilike.%${busqueda}%`).limit(10);
       if (data) setClientes(data);
     };
     const t = setTimeout(buscar, 300);
@@ -76,7 +77,7 @@ export function VistaPedidos() {
 
   useEffect(() => {
     const fetchTodos = async () => {
-      const { data } = await supabase.from('pedidos').select('*, clientes(nombre, apellidos, telefono)');
+      const { data } = await supabase.from('pedidos').select('*, clientes(id, nombre, apellidos, telefono, telefono2, contacto2)');
       if (data) {
         const sortedData = data.sort((a, b) => {
           const apA = (a.clientes?.apellidos || '').toLowerCase();
@@ -91,7 +92,14 @@ export function VistaPedidos() {
 
   const seleccionarPedidoDirecto = async (p: any) => {
     if (p.clientes) {
-      setClienteSeleccionado({ id: p.cliente_id, nombre: p.clientes.nombre, apellidos: p.clientes.apellidos, telefono: p.clientes.telefono } as Cliente);
+      setClienteSeleccionado({
+        id: p.cliente_id,
+        nombre: p.clientes.nombre,
+        apellidos: p.clientes.apellidos,
+        telefono: p.clientes.telefono,
+        telefono2: p.clientes.telefono2,
+        contacto2: p.clientes.contacto2
+      } as Cliente);
       const { data: pData } = await supabase.from('pedidos').select('*').eq('cliente_id', p.cliente_id).order('created_at', { ascending: false });
       setPedidos(pData || []);
     }
@@ -156,6 +164,8 @@ export function VistaPedidos() {
     setEditForm({
       descripcion: pedidoSeleccionado.descripcion || m.modelo || (pedidoSeleccionado.detalles_tejido && pedidoSeleccionado.detalles_tejido.split(' | ')[0]) || '',
       fabricante: pedidoSeleccionado.fabricante || '',
+      fecha_pedido: pedidoSeleccionado.fecha_pedido || '',
+      numero_talon: pedidoSeleccionado.numero_talon || '',
       tipo_articulo: m.tipo_articulo || 'SENORA',
       pecho: m.pecho || '', cintura: m.cintura || '',
       cadera: m.cadera || '', manga: m.manga || '',
@@ -210,6 +220,8 @@ export function VistaPedidos() {
 
     const { error } = await supabase.from('pedidos').update({
       fabricante: editForm.fabricante,
+      fecha_pedido: editForm.fecha_pedido || null,
+      numero_talon: editForm.numero_talon || null,
       medidas: upMed,
       detalles_tejido: combinedDetalles,
       precio_total: upPrecio
@@ -226,12 +238,20 @@ export function VistaPedidos() {
     if (updatedPagos) setPagos(updatedPagos);
 
     if (!error) {
-      const pNew = { ...pedidoSeleccionado, fabricante: editForm.fabricante, medidas: upMed, detalles_tejido: combinedDetalles, precio_total: upPrecio };
+      const pNew = { ...pedidoSeleccionado, fabricante: editForm.fabricante, fecha_pedido: editForm.fecha_pedido || null, numero_talon: editForm.numero_talon || null, medidas: upMed, detalles_tejido: combinedDetalles, precio_total: upPrecio };
       setPedidoSeleccionado(pNew);
       setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
       setIsEditing(false);
       alert("Cambios guardados con éxito.");
     } else alert('Error: ' + error.message);
+  };
+
+  const guardarTalonRapido = async (val: string) => {
+    if (!pedidoSeleccionado) return;
+    const pNew = { ...pedidoSeleccionado, numero_talon: val };
+    setPedidoSeleccionado(pNew);
+    setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
+    await supabase.from('pedidos').update({ numero_talon: val || null }).eq('id', pedidoSeleccionado.id);
   };
 
   const guardarNuevoPago = async (e: React.FormEvent) => {
@@ -432,6 +452,38 @@ export function VistaPedidos() {
     return null;
   };
 
+  const getInfoClienteActual = () => {
+    const c = clienteSeleccionado || (pedidoSeleccionado as any)?.clientes;
+    const tel1 = c?.telefono?.trim() || '';
+    const tel2 = c?.telefono2?.trim() || '';
+    const nom1 = `${c?.nombre || ''} ${c?.apellidos || ''}`.trim() || 'Cliente';
+    const nom2 = c?.contacto2?.trim() ? c.contacto2.trim() : 'Teléfono 2';
+    return { tel1, tel2, nom1, nom2 };
+  };
+
+  const handleLlamar = () => {
+    const { tel1, tel2, nom1, nom2 } = getInfoClienteActual();
+    if (tel1 && tel2) {
+      setModalContacto({ tipo: 'call', tel1, nom1, tel2, nom2 });
+    } else {
+      const targetTel = tel1 || tel2;
+      if (targetTel && window.confirm(`¿Llamar al cliente al número ${targetTel}?`)) {
+        window.location.href = `tel:${targetTel}`;
+      }
+    }
+  };
+
+  const handleWhatsApp = () => {
+    const { tel1, tel2, nom1, nom2 } = getInfoClienteActual();
+    if (tel1 && tel2) {
+      setModalContacto({ tipo: 'wa', tel1, nom1, tel2, nom2 });
+    } else {
+      const targetTel = tel1 || tel2;
+      if (targetTel) {
+        window.open(`https://wa.me/34${targetTel.replace(/\D/g, '')}`, '_blank');
+      }
+    }
+  };
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-3xl mx-auto min-h-[60vh]">
@@ -445,14 +497,17 @@ export function VistaPedidos() {
             <span>{paso === 1 ? 'Buscar' : paso === 2 ? 'Pedidos del Cliente' : clienteSeleccionado ? `Pedido de ${clienteSeleccionado.nombre} ${clienteSeleccionado.apellidos}` : 'Detalle del Pedido'}</span>
           </h2>
         </div>
-        {paso === 3 && (clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono) && (
+        {paso === 3 && (
+          (clienteSeleccionado?.telefono || clienteSeleccionado?.telefono2) ||
+          ((pedidoSeleccionado as any)?.clientes?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono2)
+        ) && (
           <div className="flex flex-col gap-2 w-full md:w-auto shrink-0 mt-3 md:mt-0">
-            <a href={`tel:${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}`} onClick={(e) => { if(!window.confirm(`¿Llamar al cliente al número ${clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono}?`)) e.preventDefault(); }} className="flex items-center justify-center w-full px-4 py-2 bg-green-100 text-green-700 hover:bg-green-200 rounded-xl text-lg font-bold transition-colors shadow-sm">
+            <button onClick={handleLlamar} className="flex items-center justify-center w-full px-4 py-2 bg-green-100 text-green-700 hover:bg-green-200 rounded-xl text-lg font-bold transition-colors shadow-sm cursor-pointer">
               <Phone size={24} className="mr-2" /> Llamar
-            </a>
-            <a href={`https://wa.me/34${(clienteSeleccionado?.telefono || (pedidoSeleccionado as any)?.clientes?.telefono || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center w-full px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-2 border-emerald-100 rounded-xl text-lg font-bold transition-colors shadow-sm">
+            </button>
+            <button onClick={handleWhatsApp} className="flex items-center justify-center w-full px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-2 border-emerald-100 rounded-xl text-lg font-bold transition-colors shadow-sm cursor-pointer">
               <MessageCircle size={24} className="mr-2" /> WhatsApp
-            </a>
+            </button>
           </div>
         )}
       </div>
@@ -460,7 +515,7 @@ export function VistaPedidos() {
       {paso === 1 && (
         <div className="space-y-6 animate-fadeIn">
           <div className="relative"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400"><Search size={24} /></div><input type="text" placeholder="Buscar..." className="w-full pl-12 p-4 border-2 border-gray-100 rounded-xl outline-none text-lg focus:border-rose-300" value={busqueda} onChange={e => setBusqueda(e.target.value)} /></div>
-          <div className="space-y-2">{clientes.length > 0 ? clientes.map(c => (<div key={c.id} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-center" onClick={() => seleccionarCliente(c)}><div className="bg-rose-50 p-3 rounded-full mr-4 text-rose-500"><User size={24} /></div><div><p className="font-bold text-gray-800 text-lg">{c.apellidos}, {c.nombre}</p><p className="text-gray-500 text-sm">{c.telefono}</p></div></div>)) : busqueda.trim().length >= 2 && <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm font-medium text-center">⚠️ No se encontró ningún cliente con "{busqueda}".</div>}</div>
+          <div className="space-y-2">{clientes.length > 0 ? clientes.map(c => (<div key={c.id} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-center" onClick={() => seleccionarCliente(c)}><div className="bg-rose-50 p-3 rounded-full mr-4 text-rose-500"><User size={24} /></div><div><p className="font-bold text-gray-800 text-lg">{c.apellidos}, {c.nombre}</p><p className="text-gray-500 text-sm">{c.telefono || ''}{c.telefono2 ? ` | Tel 2: ${c.telefono2}${c.contacto2 ? ` (${c.contacto2})` : ''}` : ''}</p></div></div>)) : busqueda.trim().length >= 2 && <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm font-medium text-center">⚠️ No se encontró ningún cliente con "{busqueda}".</div>}</div>
           
           {!busqueda && todosLosPedidos.length > 0 && (
             <div className="mt-8 border-t border-gray-100 pt-6">
@@ -507,22 +562,57 @@ export function VistaPedidos() {
             <div className="w-full md:pr-4">
               {isEditing ? (
                 <>
-                  <input type="text" className="text-2xl font-black text-gray-800 border-b-2 border-rose-300 outline-none w-full mb-1" value={editForm.descripcion} onChange={e => setEditForm({...editForm, descripcion: e.target.value})} placeholder="Descripción del pedido..." />
-                  <div className="flex items-center text-gray-500 font-medium mt-2">
-                    <span className="mr-2">{pedidoSeleccionado.categoria} | Pedido el {pedidoSeleccionado.fecha_pedido} | Fabricante: </span>
-                    <select className="border-b-2 border-rose-300 outline-none bg-transparent" value={editForm.fabricante} onChange={e => setEditForm({...editForm, fabricante: e.target.value})}>
-                      <option value="">Sin especificar</option>
-                      <option value="Ana Barroso">Ana Barroso</option>
-                      <option value="Aires de Ferias">Aires de Ferias</option>
-                      <option value="Carmen Moda">Carmen Moda</option>
-                      <option value="OTRO">Otro...</option>
-                    </select>
+                  <input type="text" className="text-2xl font-black text-gray-800 border-b-2 border-rose-300 outline-none w-full mb-2" value={editForm.descripcion} onChange={e => setEditForm({...editForm, descripcion: e.target.value})} placeholder="Descripción del pedido..." />
+                  <div className="flex flex-wrap items-center gap-3 text-sm md:text-base font-bold">
+                    <div className="flex items-center bg-rose-50 p-2 rounded-xl border border-rose-200">
+                      <span className="text-rose-900 mr-1.5 font-extrabold">📅 Fecha:</span>
+                      <input type="date" className="bg-white p-1.5 border rounded-lg font-bold text-gray-800 outline-none" value={editForm.fecha_pedido || ''} onChange={e => setEditForm({...editForm, fecha_pedido: e.target.value})} />
+                    </div>
+                    <div className="flex items-center bg-amber-50 p-2 rounded-xl border border-amber-200">
+                      <span className="text-amber-900 mr-1.5 font-extrabold">🏭 Fabricante:</span>
+                      <select className="bg-white p-1.5 border rounded-lg font-bold text-gray-800 outline-none" value={editForm.fabricante} onChange={e => setEditForm({...editForm, fabricante: e.target.value})}>
+                        <option value="">Sin especificar</option>
+                        <option value="Ana Barroso">Ana Barroso</option>
+                        <option value="Aires de Ferias">Aires de Ferias</option>
+                        <option value="Carmen Moda">Carmen Moda</option>
+                        <option value="OTRO">Otro...</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center bg-blue-50 p-2 rounded-xl border border-blue-200">
+                      <Ticket size={18} className="mr-1.5 text-blue-700 shrink-0" />
+                      <span className="text-blue-900 mr-1.5 font-extrabold">Nº Talón:</span>
+                      <input
+                        type="text"
+                        placeholder="Escribir..."
+                        className="bg-white p-1.5 border border-blue-300 rounded-lg font-bold text-gray-800 outline-none w-28 text-center"
+                        value={editForm.numero_talon || ''}
+                        onChange={e => setEditForm({...editForm, numero_talon: e.target.value})}
+                      />
+                    </div>
                   </div>
                 </>
               ) : (
                 <>
-                  <h3 className="text-xl md:text-2xl font-black text-gray-800 break-words">{getDesc(pedidoSeleccionado)}</h3>
-                  <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-tight">{pedidoSeleccionado.categoria} | Pedido el {pedidoSeleccionado.fecha_pedido}{pedidoSeleccionado.fabricante ? ` | Fabricante: ${pedidoSeleccionado.fabricante}` : ''}</p>
+                  <h3 className="text-2xl md:text-3xl font-black text-gray-900 break-words">{getDesc(pedidoSeleccionado)}</h3>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <span className="inline-flex items-center text-sm md:text-base font-bold px-3.5 py-1.5 bg-rose-100 text-rose-900 rounded-xl shadow-sm border border-rose-200">
+                      📅 Pedido el: <strong className="ml-1.5 text-base md:text-lg font-black text-rose-950">{pedidoSeleccionado.fecha_pedido || 'Sin fecha'}</strong>
+                    </span>
+                    <span className="inline-flex items-center text-sm md:text-base font-bold px-3.5 py-1.5 bg-amber-100 text-amber-900 rounded-xl shadow-sm border border-amber-200">
+                      🏭 Fabricante: <strong className="ml-1.5 text-base md:text-lg font-black text-amber-950">{pedidoSeleccionado.fabricante || 'Sin especificar'}</strong>
+                    </span>
+                    <span className="inline-flex items-center text-sm md:text-base font-bold px-3 py-1 bg-blue-50 text-blue-900 rounded-xl shadow-sm border-2 border-blue-200">
+                      <Ticket size={18} className="mr-1.5 text-blue-700 shrink-0" />
+                      <span className="text-blue-900 font-extrabold mr-1.5 whitespace-nowrap">Nº Talón:</span>
+                      <input
+                        type="text"
+                        placeholder="Escribir..."
+                        className="bg-white px-2 py-1 border border-blue-300 rounded-lg font-black text-blue-950 w-28 text-center outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-200 shadow-inner text-sm md:text-base"
+                        value={pedidoSeleccionado.numero_talon || ''}
+                        onChange={e => guardarTalonRapido(e.target.value)}
+                      />
+                    </span>
+                  </div>
                 </>
               )}
             </div>
@@ -589,8 +679,8 @@ export function VistaPedidos() {
             </div>
 
             {/* Sección Tejidos */}
-            <div className="mt-4 bg-rose-50/50 p-4 rounded-xl border border-rose-100 space-y-3">
-              <span className="text-xs md:text-sm font-bold text-rose-800 uppercase block">Tejidos y Detalle</span>
+            <div className="mt-4 bg-rose-50/50 p-4 sm:p-5 rounded-2xl border-2 border-rose-100 space-y-4">
+              <span className="text-sm md:text-base font-black text-rose-900 uppercase block tracking-wide">Tejidos y Detalle</span>
               
               {isEditing ? (
                 <div className="space-y-3">
@@ -638,30 +728,30 @@ export function VistaPedidos() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-800 font-medium">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-base md:text-xl text-gray-900 font-medium">
                   <div>
-                    <span className="font-bold text-rose-900">Tejido 1: </span>
-                    <span>{pedidoSeleccionado.medidas?.tejido1 || '-'}</span>
+                    <span className="font-extrabold text-rose-900">Tejido 1: </span>
+                    <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejido1 || '-'}</span>
                   </div>
                   {(pedidoSeleccionado.medidas?.numTejidos >= 2 || pedidoSeleccionado.medidas?.tejido2) && (
                     <div>
-                      <span className="font-bold text-rose-900">Tejido 2: </span>
-                      <span>{pedidoSeleccionado.medidas?.tejido2 || '-'}</span>
+                      <span className="font-extrabold text-rose-900">Tejido 2: </span>
+                      <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejido2 || '-'}</span>
                     </div>
                   )}
                   {(pedidoSeleccionado.medidas?.numTejidos >= 3 || pedidoSeleccionado.medidas?.tejido3) && (
                     <div>
-                      <span className="font-bold text-rose-900">Tejido 3: </span>
-                      <span>{pedidoSeleccionado.medidas?.tejido3 || '-'}</span>
+                      <span className="font-extrabold text-rose-900">Tejido 3: </span>
+                      <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejido3 || '-'}</span>
                     </div>
                   )}
                   <div>
-                    <span className="font-bold text-rose-900">Tejido Can Can: </span>
-                    <span>{pedidoSeleccionado.medidas?.tejidoCancan || '-'}</span>
+                    <span className="font-extrabold text-rose-900">Tejido Can Can: </span>
+                    <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejidoCancan || '-'}</span>
                   </div>
                   <div>
-                    <span className="font-bold text-rose-900">Color Cordoncillo: </span>
-                    <span>{pedidoSeleccionado.medidas?.colorCordoncillo || '-'}</span>
+                    <span className="font-extrabold text-rose-900">Color Cordoncillo: </span>
+                    <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.colorCordoncillo || '-'}</span>
                   </div>
                 </div>
               )}
@@ -737,6 +827,69 @@ export function VistaPedidos() {
             {restante > 0 && (
               <form onSubmit={guardarNuevoPago} className="flex flex-col gap-3 mt-4 pt-4 border-t border-rose-200"><input type="number" step="0.01" inputMode="decimal" placeholder="Abono (€)" className="w-full p-3 border-2 border-rose-200 rounded-xl outline-none font-bold focus:border-rose-400 text-center" value={nuevoPago} onChange={e => setNuevoPago(e.target.value)} /><button type="submit" disabled={loadingPago} className="w-full bg-rose-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-rose-700 flex items-center justify-center"><Plus size={20} className="mr-1"/> Añadir</button></form>
             )}
+          </div>
+        </div>
+      )}
+
+      {modalContacto && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                {modalContacto.tipo === 'call' ? <Phone className="text-green-600" size={22} /> : <MessageCircle className="text-emerald-600" size={22} />}
+                {modalContacto.tipo === 'call' ? '¿A quién quieres llamar?' : '¿A quién enviar WhatsApp?'}
+              </h3>
+              <button onClick={() => setModalContacto(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500 font-medium">Este cliente tiene dos teléfonos registrados. Elige la persona de contacto:</p>
+
+            <div className="space-y-3 pt-1">
+              <button
+                onClick={() => {
+                  const tel = modalContacto.tel1;
+                  setModalContacto(null);
+                  if (modalContacto.tipo === 'call') window.location.href = `tel:${tel}`;
+                  else window.open(`https://wa.me/34${tel.replace(/\D/g, '')}`, '_blank');
+                }}
+                className="w-full text-left p-4 border-2 border-gray-100 hover:border-rose-300 rounded-xl bg-gray-50 hover:bg-rose-50/50 transition-all flex items-center justify-between group cursor-pointer"
+              >
+                <div>
+                  <p className="font-bold text-gray-800 text-base group-hover:text-rose-700">{modalContacto.nom1}</p>
+                  <p className="text-sm font-semibold text-gray-500">{modalContacto.tel1}</p>
+                </div>
+                <span className={`text-xs font-bold px-3 py-1.5 rounded-lg text-white ${modalContacto.tipo === 'call' ? 'bg-green-600' : 'bg-emerald-600'}`}>
+                  {modalContacto.tipo === 'call' ? 'Llamar' : 'WhatsApp'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  const tel = modalContacto.tel2;
+                  setModalContacto(null);
+                  if (modalContacto.tipo === 'call') window.location.href = `tel:${tel}`;
+                  else window.open(`https://wa.me/34${tel.replace(/\D/g, '')}`, '_blank');
+                }}
+                className="w-full text-left p-4 border-2 border-gray-100 hover:border-rose-300 rounded-xl bg-gray-50 hover:bg-rose-50/50 transition-all flex items-center justify-between group cursor-pointer"
+              >
+                <div>
+                  <p className="font-bold text-gray-800 text-base group-hover:text-rose-700">{modalContacto.nom2}</p>
+                  <p className="text-sm font-semibold text-gray-500">{modalContacto.tel2}</p>
+                </div>
+                <span className={`text-xs font-bold px-3 py-1.5 rounded-lg text-white ${modalContacto.tipo === 'call' ? 'bg-green-600' : 'bg-emerald-600'}`}>
+                  {modalContacto.tipo === 'call' ? 'Llamar' : 'WhatsApp'}
+                </span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setModalContacto(null)}
+              className="w-full py-2.5 text-center text-sm font-bold text-gray-500 hover:text-gray-800 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors mt-2 cursor-pointer"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
       )}

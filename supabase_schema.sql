@@ -9,6 +9,8 @@ CREATE TABLE clientes (
     apellidos TEXT NOT NULL,
     nombre TEXT NOT NULL,
     telefono TEXT,
+    telefono2 TEXT,
+    contacto2 TEXT,
     direccion TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -23,6 +25,7 @@ CREATE TABLE pedidos (
     estado_proceso estado_proceso_pedido NOT NULL DEFAULT 'PENDIENTE_LLEGADA',
     fabricante TEXT,
     fecha_pedido DATE,
+    numero_talon TEXT,
     medidas JSONB,
     detalles_tejido TEXT,
     precio_total DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
