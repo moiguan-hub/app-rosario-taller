@@ -121,30 +121,33 @@ export function VistaTallas() {
       )}
 
       {cat === 'FLAMENCA' && fab && tipo && (
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 space-y-6">
-          <div className="border-b pb-4 flex justify-between items-center">
-            <div><span className="text-xs font-bold text-rose-600 uppercase">Tabla de Medidas</span><h3 className="text-2xl font-black text-gray-800">{fab} — {tipo === 'SENORA' ? 'Señora' : 'Niña'}</h3></div>
-            <span className="bg-rose-100 text-rose-800 text-xs font-bold px-3 py-1 rounded-full">Medidas en cm</span>
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-3 sm:p-6 space-y-4 sm:space-y-6">
+          <div className="border-b pb-3 flex justify-between items-center gap-2">
+            <div>
+              <span className="text-[10px] sm:text-xs font-bold text-rose-600 uppercase tracking-wider">Tabla de Medidas</span>
+              <h3 className="text-lg sm:text-2xl font-black text-gray-800">{fab} — {tipo === 'SENORA' ? 'Señora' : 'Niña'}</h3>
+            </div>
+            <span className="bg-rose-100 text-rose-800 text-[10px] sm:text-xs font-bold px-2 py-0.5 sm:px-3 sm:py-1 rounded-full whitespace-nowrap shrink-0">Medidas en cm</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-center border-collapse">
               <thead>
-                <tr className="bg-gray-50 text-gray-700 text-sm font-bold border-b border-gray-200">
-                  <th className="py-3 px-4">Talla</th>
-                  <th className="py-3 px-4">Pecho (cm)</th>
-                  <th className="py-3 px-4">Cintura (cm)</th>
-                  <th className="py-3 px-4">Cadera (cm)</th>
-                  {'l' in (TALLAS_DATA[fab][tipo][0] || {}) && <th className="py-3 px-4">Largo (cm)</th>}
+                <tr className="bg-gray-50 text-gray-700 text-xs sm:text-sm font-bold border-b border-gray-200">
+                  <th className="py-2 px-1 sm:px-3 text-left">Talla</th>
+                  <th className="py-2 px-1 sm:px-3">Pecho</th>
+                  <th className="py-2 px-1 sm:px-3">Cintura</th>
+                  <th className="py-2 px-1 sm:px-3">Cadera</th>
+                  {'l' in (TALLAS_DATA[fab][tipo][0] || {}) && <th className="py-2 px-1 sm:px-3">Largo</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-800">
+              <tbody className="divide-y divide-gray-100 text-gray-800 text-xs sm:text-base">
                 {TALLAS_DATA[fab][tipo].map((row) => (
                   <tr key={row.t} className="hover:bg-rose-50 transition-colors">
-                    <td className="py-3 px-4 font-black text-rose-600 text-lg">{row.t}</td>
-                    <td className="py-3 px-4 font-semibold">{row.p}</td>
-                    <td className="py-3 px-4 font-semibold">{row.c}</td>
-                    <td className="py-3 px-4 font-semibold">{row.ca}</td>
-                    {row.l !== undefined && <td className="py-3 px-4 font-semibold">{row.l}</td>}
+                    <td className="py-2 px-1 sm:px-3 text-left font-black text-rose-600 text-base sm:text-lg">{row.t}</td>
+                    <td className="py-2 px-1 sm:px-3 font-semibold">{row.p}</td>
+                    <td className="py-2 px-1 sm:px-3 font-semibold">{row.c}</td>
+                    <td className="py-2 px-1 sm:px-3 font-semibold">{row.ca}</td>
+                    {row.l !== undefined && <td className="py-2 px-1 sm:px-3 font-semibold">{row.l}</td>}
                   </tr>
                 ))}
               </tbody>

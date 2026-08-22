@@ -153,7 +153,16 @@ export function VistaClientes() {
                           <div className="flex items-center space-x-3">
                             <div className="bg-rose-50 text-rose-600 p-2 rounded-lg"><FileText size={18} /></div>
                             <div>
-                              <p className="font-bold text-gray-800 text-sm">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Pedido sin título'}</p>
+                              <p className="font-bold text-gray-800 text-sm">
+                                {(() => {
+                                  let title = p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Pedido sin título';
+                                  const tVal = p.medidas?.talla === 'TEspecial' ? 'TEsp' : p.medidas?.talla;
+                                  if (tVal && tVal !== '-' && !title.toLowerCase().includes('talla')) {
+                                    return `${title} (Talla: ${tVal})`;
+                                  }
+                                  return title;
+                                })()}
+                              </p>
                               <p className="text-xs text-gray-500">{p.categoria} {p.fabricante ? `• ${p.fabricante}` : ''} • {p.fecha_pedido || 'Sin fecha'}</p>
                             </div>
                           </div>

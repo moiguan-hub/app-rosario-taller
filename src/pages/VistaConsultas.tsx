@@ -49,14 +49,19 @@ export function VistaConsultas() {
   const getDesc = (p: any) => {
     if (!p) return '';
     let raw = p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Sin descripción';
-    return raw.replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*\[(SENORA|NINA)\]\s*/i, '[$1] ')
-              .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*/i, '[$1] ')
-              .replace(/^Modelo:\s*/i, '');
+    let formatted = raw.replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*\[(SENORA|NINA)\]\s*/i, '[$1] ')
+                       .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*/i, '[$1] ')
+                       .replace(/^Modelo:\s*/i, '');
+    const tallaVal = p.medidas?.talla === 'TEspecial' ? 'TEsp' : p.medidas?.talla;
+    if (tallaVal && tallaVal !== '-' && !formatted.toLowerCase().includes('talla')) {
+      return `${formatted} (Talla: ${tallaVal})`;
+    }
+    return formatted;
   };
 
   const fabricantes = Array.from(new Set(pedidos.map(p => p.fabricante).filter(Boolean)));
 
-  const pedidosFiltrados = pedidos.filter(p => {
+  const baseParaConteo = pedidos.filter(p => {
     // Filtro categoría
     if (filtroCategoria !== 'TODOS') {
       if (filtroCategoria === 'FLAMENCA') {
@@ -64,14 +69,6 @@ export function VistaConsultas() {
       } else if (filtroCategoria === 'COMUNION') {
         if (p.categoria !== 'COMUNION') return false;
       }
-    }
-
-    if (filtroEstado === 'FABRICA') {
-      if (p.estado_proceso === 'ENTREGADO' || p.estado_ubicacion !== 'PEDIDO') return false;
-    } else if (filtroEstado === 'TIENDA') {
-      if (p.estado_proceso === 'ENTREGADO' || p.estado_ubicacion !== 'STOCK') return false;
-    } else if (filtroEstado === 'ENTREGADO') {
-      if (p.estado_proceso !== 'ENTREGADO') return false;
     }
 
     if (filtroFabricante !== 'TODOS') {
@@ -86,6 +83,23 @@ export function VistaConsultas() {
       if (!clienteNom.includes(term) && !desc.includes(term) && !fab.includes(term)) {
         return false;
       }
+    }
+
+    return true;
+  });
+
+  const countTodos = baseParaConteo.length;
+  const countFabrica = baseParaConteo.filter(p => p.estado_proceso !== 'ENTREGADO' && p.estado_ubicacion === 'PEDIDO').length;
+  const countTienda = baseParaConteo.filter(p => p.estado_proceso !== 'ENTREGADO' && p.estado_ubicacion === 'STOCK').length;
+  const countEntregado = baseParaConteo.filter(p => p.estado_proceso === 'ENTREGADO').length;
+
+  const pedidosFiltrados = baseParaConteo.filter(p => {
+    if (filtroEstado === 'FABRICA') {
+      if (p.estado_proceso === 'ENTREGADO' || p.estado_ubicacion !== 'PEDIDO') return false;
+    } else if (filtroEstado === 'TIENDA') {
+      if (p.estado_proceso === 'ENTREGADO' || p.estado_ubicacion !== 'STOCK') return false;
+    } else if (filtroEstado === 'ENTREGADO') {
+      if (p.estado_proceso !== 'ENTREGADO') return false;
     }
 
     return true;
@@ -165,16 +179,16 @@ export function VistaConsultas() {
         {/* Botones de Filtro Estado */}
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setFiltroEstado('TODOS')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${filtroEstado === 'TODOS' ? 'bg-rose-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-            Todos ({pedidos.length})
+            Todos ({countTodos})
           </button>
           <button onClick={() => setFiltroEstado('FABRICA')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${filtroEstado === 'FABRICA' ? 'bg-amber-500 text-white shadow-sm' : 'bg-amber-50 text-amber-800 hover:bg-amber-100'}`}>
-            En Fábrica
+            En Fábrica ({countFabrica})
           </button>
           <button onClick={() => setFiltroEstado('TIENDA')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${filtroEstado === 'TIENDA' ? 'bg-green-600 text-white shadow-sm' : 'bg-green-50 text-green-800 hover:bg-green-100'}`}>
-            En Tienda
+            En Tienda ({countTienda})
           </button>
           <button onClick={() => setFiltroEstado('ENTREGADO')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${filtroEstado === 'ENTREGADO' ? 'bg-purple-600 text-white shadow-sm' : 'bg-purple-50 text-purple-800 hover:bg-purple-100'}`}>
-            Entregados
+            Entregados ({countEntregado})
           </button>
         </div>
 

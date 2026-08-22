@@ -326,9 +326,14 @@ export function VistaPedidos() {
   const getDesc = (p: Pedido | null) => {
     if (!p) return '';
     let raw = p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Sin descripción';
-    return raw.replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*\[(SENORA|NINA)\]\s*/i, '[$1] ')
-              .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*/i, '[$1] ')
-              .replace(/^Modelo:\s*/i, '');
+    let formatted = raw.replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*\[(SENORA|NINA)\]\s*/i, '[$1] ')
+                       .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*/i, '[$1] ')
+                       .replace(/^Modelo:\s*/i, '');
+    const tallaVal = p.medidas?.talla === 'TEspecial' ? 'TEsp' : p.medidas?.talla;
+    if (tallaVal && tallaVal !== '-' && !formatted.toLowerCase().includes('talla')) {
+      return `${formatted} (Talla: ${tallaVal})`;
+    }
+    return formatted;
   };
 
   const getObs = (p: Pedido | null) => {
