@@ -170,7 +170,15 @@ export function VistaClientes() {
             </div>
           );
         })}
-        {clientes.length === 0 && <p className="text-center text-gray-500">No hay clientes registrados.</p>}
+        {clientes.length === 0 && (
+          busqueda.trim().length > 0 ? (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm font-medium text-center">
+              ⚠️ No se encontró ningún cliente con "{busqueda}".
+            </div>
+          ) : (
+            <p className="text-center text-gray-500">No hay clientes registrados.</p>
+          )
+        )}
       </div>
     </div>
   );

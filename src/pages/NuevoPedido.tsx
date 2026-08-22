@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Cliente, CategoriaPedido } from '../types/database.types';
 
@@ -12,6 +12,8 @@ export function NuevoPedido() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
   const [loading, setLoading] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const [busquedaRealizada, setBusquedaRealizada] = useState(false);
 
   const [nuevoCliente, setNuevoCliente] = useState({ apellidos: '', nombre: '', telefono: '', direccion: '' });
   const [pedido, setPedido] = useState({
@@ -21,7 +23,16 @@ export function NuevoPedido() {
     fecha_pedido: new Date().toISOString().split('T')[0],
     fabricante: '', 
     pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', talla: '',
-    observaciones: '', precio_total: '', entrega_cuenta: ''
+    numTejidos: 1,
+    tejido1: '',
+    tejido2: '',
+    tejido3: '',
+    tejidoCancan: '',
+    colorCordoncillo: '',
+    observaciones: '',
+    precioTraje: '',
+    cargosExtra: [] as Array<{ concepto: string; precio: string }>,
+    entrega_cuenta: ''
   });
 
   useEffect(() => {
@@ -38,12 +49,20 @@ export function NuevoPedido() {
   }, []);
   useEffect(() => {
     const buscar = async () => {
-      if (busqueda.length < 2) return setClientes([]);
+      if (busqueda.trim().length < 2) {
+        setClientes([]);
+        setBusquedaRealizada(false);
+        setBuscando(false);
+        return;
+      }
+      setBuscando(true);
       const { data } = await supabase.from('clientes')
         .select('*')
         .or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%`)
         .limit(5);
       if (data) setClientes(data);
+      setBuscando(false);
+      setBusquedaRealizada(true);
     };
     const t = setTimeout(buscar, 300);
     return () => clearTimeout(t);
@@ -53,6 +72,7 @@ export function NuevoPedido() {
     setClienteSeleccionado(c);
     setBusqueda(c.nombre + ' ' + c.apellidos);
     setClientes([]);
+    setBusquedaRealizada(false);
     setPaso(2);
   };
 
@@ -91,7 +111,7 @@ export function NuevoPedido() {
       }
 
       if (!pedido.descripcion.trim()) {
-        alert('Por favor, ingresa un Nombre o Descripción para el pedido.');
+        alert('Por favor, ingresa el Modelo del pedido.');
         setLoading(false);
         return;
       }
@@ -101,18 +121,32 @@ export function NuevoPedido() {
         return;
       }
 
+      const tejidosList = [];
+      if (pedido.tejido1.trim()) tejidosList.push(`Tejido 1: ${pedido.tejido1.trim()}`);
+      if (pedido.numTejidos >= 2 && pedido.tejido2.trim()) tejidosList.push(`Tejido 2: ${pedido.tejido2.trim()}`);
+      if (pedido.numTejidos >= 3 && pedido.tejido3.trim()) tejidosList.push(`Tejido 3: ${pedido.tejido3.trim()}`);
+      if (pedido.tejidoCancan.trim()) tejidosList.push(`Tejido Can Can: ${pedido.tejidoCancan.trim()}`);
+      if (pedido.colorCordoncillo.trim()) tejidosList.push(`Color Cordoncillo: ${pedido.colorCordoncillo.trim()}`);
+      const tejidosStr = tejidosList.join(' | ');
+
       const { data: ord, error: errO } = await supabase.from('pedidos').insert([{
         cliente_id: clientId,
         categoria: pedido.categoria,
         fabricante: pedido.fabricante,
         fecha_pedido: pedido.fecha_pedido, 
         medidas: {
+          modelo: pedido.descripcion,
           tipo_articulo: pedido.categoria === 'FLAMENCA' ? pedido.tipo_articulo : null, pecho: pedido.pecho, cintura: pedido.cintura, cadera: pedido.cadera,
           manga: pedido.manga, talle: pedido.talle, largo_total: pedido.largo_total,
-          contorno_brazo: pedido.contorno_brazo, talla: pedido.talla
+          contorno_brazo: pedido.contorno_brazo, talla: pedido.talla,
+          numTejidos: pedido.numTejidos, tejido1: pedido.tejido1, tejido2: pedido.tejido2, tejido3: pedido.tejido3,
+          tejidoCancan: pedido.tejidoCancan, colorCordoncillo: pedido.colorCordoncillo,
+          observaciones: pedido.observaciones,
+          precioTraje: pedido.precioTraje,
+          cargosExtra: pedido.cargosExtra
         },
-        detalles_tejido: (pedido.categoria === 'FLAMENCA' ? '[' + pedido.tipo_articulo + '] ' : '') + pedido.descripcion + (pedido.observaciones ? ' | ' + pedido.observaciones : ''), 
-        precio_total: parseFloat(pedido.precio_total) || 0
+        detalles_tejido: (pedido.categoria === 'FLAMENCA' ? '[' + pedido.tipo_articulo + '] ' : '') + (pedido.descripcion ? 'Modelo: ' + pedido.descripcion : '') + (tejidosStr ? ' | ' + tejidosStr : '') + (pedido.observaciones ? ' | ' + pedido.observaciones : ''), 
+        precio_total: calcularPrecioTotal()
       }] as any).select().single();
       if (errO) throw errO;
 
@@ -223,6 +257,32 @@ export function NuevoPedido() {
     return null;
   };
 
+  const limpiarFormulario = () => {
+    setPedido({
+      descripcion: '',
+      categoria: 'FLAMENCA' as CategoriaPedido,
+      tipo_articulo: 'SENORA' as 'NINA' | 'SENORA' | null,
+      fecha_pedido: new Date().toISOString().split('T')[0],
+      fabricante: '', 
+      pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', talla: '',
+      numTejidos: 1,
+      tejido1: '',
+      tejido2: '',
+      tejido3: '',
+      tejidoCancan: '',
+      colorCordoncillo: '',
+      observaciones: '',
+      precioTraje: '',
+      cargosExtra: [],
+      entrega_cuenta: ''
+    });
+  };
+  const calcularPrecioTotal = () => {
+    const pTraje = parseFloat(pedido.precioTraje) || 0;
+    const pExtra = pedido.cargosExtra.reduce((acc, curr) => acc + (parseFloat(curr.precio) || 0), 0);
+    return pTraje + pExtra;
+  };
+
   const handleAtras = () => {
     if (paso === 2) {
       setPaso(1);
@@ -235,13 +295,25 @@ export function NuevoPedido() {
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-2xl mx-auto min-h-[60vh]">
-      <div className="flex items-center mb-8 border-b border-gray-100 pb-4">
-        <button onClick={handleAtras} className="p-2 mr-4 bg-gray-50 rounded-full hover:bg-rose-50 hover:text-rose-600 text-gray-500 transition-colors">
-          <ArrowLeft size={24} />
-        </button>
-        <h2 className="text-2xl font-bold text-gray-800">
-          {paso === 1 ? 'Paso 1: Identificar Cliente' : 'Paso 2: Detalles del Pedido'}
-        </h2>
+      <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
+        <div className="flex items-center">
+          <button onClick={handleAtras} className="p-2 mr-4 bg-gray-50 rounded-full hover:bg-rose-50 hover:text-rose-600 text-gray-500 transition-colors">
+            <ArrowLeft size={24} />
+          </button>
+          <h2 className="text-2xl font-bold text-gray-800">
+            {paso === 1 ? 'Paso 1: Identificar Cliente' : 'Paso 2: Detalles del Pedido'}
+          </h2>
+        </div>
+        {paso === 2 && (
+          <button
+            type="button"
+            onClick={limpiarFormulario}
+            className="px-3 py-1.5 text-sm font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            <RotateCcw size={16} />
+            Limpiar
+          </button>
+        )}
       </div>
       
       {paso === 1 && (
@@ -249,7 +321,14 @@ export function NuevoPedido() {
           <div className="relative">
             <label className="block text-sm font-medium text-gray-600 mb-2">Buscar cliente por Apellidos, Nombre o Teléfono</label>
             <input type="text" placeholder="Escribe para buscar..." className="w-full p-4 border-2 border-gray-100 rounded-xl focus:border-rose-300 outline-none text-lg bg-gray-50 focus:bg-white" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-            {clientes.length > 0 && (
+            
+            {buscando && (
+              <p className="mt-2 text-sm text-gray-500 italic flex items-center gap-2">
+                <span className="animate-pulse">🔍</span> Buscando cliente...
+              </p>
+            )}
+
+            {!buscando && clientes.length > 0 && (
               <div className="absolute z-10 w-full bg-white mt-2 border-2 border-rose-100 rounded-xl shadow-xl overflow-hidden">
                 {clientes.map(c => (
                   <div key={c.id} className="p-4 hover:bg-rose-50 cursor-pointer border-b border-gray-100 last:border-0" onClick={() => seleccionarCliente(c)}>
@@ -257,6 +336,16 @@ export function NuevoPedido() {
                     <p className="text-sm text-gray-500">{c.telefono} {c.direccion ? `- ${c.direccion}` : ''}</p>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {!buscando && busquedaRealizada && clientes.length === 0 && busqueda.trim().length >= 2 && !clienteSeleccionado && (
+              <div className="mt-3 p-4 bg-amber-50 border-2 border-amber-200 rounded-xl text-amber-900 text-sm flex items-start gap-3 shadow-sm">
+                <span className="text-xl leading-none">⚠️</span>
+                <div>
+                  <p className="font-bold text-amber-900">Cliente no encontrado</p>
+                  <p className="mt-0.5 text-amber-800">No se encontró ningún cliente registrado con <strong>"{busqueda}"</strong>. Completa los datos a continuación para darlo de alta.</p>
+                </div>
               </div>
             )}
           </div>
@@ -289,7 +378,10 @@ export function NuevoPedido() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <input type="text" placeholder="Nombre / Descripción del Pedido (Ej. Traje de lunares rojo)*" className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none font-bold text-gray-800 focus:border-rose-300" value={pedido.descripcion} onChange={e => setPedido({...pedido, descripcion: e.target.value})} required />
+              <div className="flex items-center border-2 border-gray-100 rounded-xl overflow-hidden focus-within:border-rose-300 bg-white">
+                <span className="pl-4 pr-1 font-bold text-gray-700 select-none">Modelo:</span>
+                <input type="text" placeholder="Escribe el modelo *" className="w-full p-3 outline-none font-bold text-gray-800" value={pedido.descripcion} onChange={e => setPedido({...pedido, descripcion: e.target.value})} required />
+              </div>
             </div>
             <select className="p-3 border-2 border-gray-100 rounded-xl outline-none" value={pedido.categoria} onChange={e => setPedido({...pedido, categoria: e.target.value as CategoriaPedido, fabricante: ''})}>
               <option value="FLAMENCA">Traje de FLAMENCA</option><option value="COMUNION">Traje de COMUNIÓN</option><option value="OTRO">OTRO</option>
@@ -351,17 +443,153 @@ export function NuevoPedido() {
             </div>
           </div>
           
+          <div className="bg-rose-50/50 p-5 rounded-xl border-2 border-rose-100 space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-rose-800 uppercase mb-2">Tejido del traje</label>
+              <select
+                className="w-full p-3 border-2 border-rose-100 rounded-xl outline-none font-semibold bg-white focus:border-rose-300"
+                value={pedido.numTejidos}
+                onChange={e => setPedido({...pedido, numTejidos: Number(e.target.value)})}
+              >
+                <option value={1}>1 Tejido</option>
+                <option value={2}>2 Tejidos</option>
+                <option value={3}>3 Tejidos</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 1</label>
+                <input
+                  type="text"
+                  placeholder="Tipo de tejido 1..."
+                  className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
+                  value={pedido.tejido1}
+                  onChange={e => setPedido({...pedido, tejido1: e.target.value})}
+                />
+              </div>
+
+              {pedido.numTejidos >= 2 && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 2</label>
+                  <input
+                    type="text"
+                    placeholder="Tipo de tejido 2..."
+                    className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
+                    value={pedido.tejido2}
+                    onChange={e => setPedido({...pedido, tejido2: e.target.value})}
+                  />
+                </div>
+              )}
+
+              {pedido.numTejidos >= 3 && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 3</label>
+                  <input
+                    type="text"
+                    placeholder="Tipo de tejido 3..."
+                    className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
+                    value={pedido.tejido3}
+                    onChange={e => setPedido({...pedido, tejido3: e.target.value})}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-rose-100">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido del Can Can</label>
+                <input
+                  type="text"
+                  placeholder="Tipo de tejido can can..."
+                  className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
+                  value={pedido.tejidoCancan}
+                  onChange={e => setPedido({...pedido, tejidoCancan: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Color del Cordoncillo</label>
+                <input
+                  type="text"
+                  placeholder="Color del cordoncillo..."
+                  className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
+                  value={pedido.colorCordoncillo}
+                  onChange={e => setPedido({...pedido, colorCordoncillo: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+
           <textarea placeholder="Observaciones / Detalles..." className="w-full p-4 border-2 border-gray-100 rounded-xl h-24 outline-none" value={pedido.observaciones} onChange={e => setPedido({...pedido, observaciones: e.target.value})}></textarea>
           
           <div className="bg-gray-50 p-5 rounded-xl border-2 border-gray-100 space-y-4">
             <h4 className="font-bold text-gray-800 uppercase text-sm border-b pb-2">Importes y Pago a Cuenta</h4>
             <div className="grid grid-cols-2 gap-6">
-              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Precio Total (€)</label><input type="number" step="0.01" inputMode="decimal" className="w-full p-3 border rounded-lg outline-none text-lg font-semibold" value={pedido.precio_total} onChange={e => setPedido({...pedido, precio_total: e.target.value})} /></div>
+              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Precio Traje (€)</label><input type="number" step="0.01" inputMode="decimal" className="w-full p-3 border rounded-lg outline-none text-lg font-semibold" value={pedido.precioTraje} onChange={e => setPedido({...pedido, precioTraje: e.target.value})} /></div>
               <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Entrega a Cuenta (€)</label><input type="number" step="0.01" inputMode="decimal" className="w-full p-3 border rounded-lg outline-none text-lg font-semibold text-rose-600" value={pedido.entrega_cuenta} onChange={e => setPedido({...pedido, entrega_cuenta: e.target.value})} /></div>
             </div>
-            <div className="flex justify-between items-center pt-3 border-t border-gray-200">
-              <span className="font-bold text-gray-600 uppercase text-sm">Restante por pagar:</span>
-              <span className="text-2xl font-black text-rose-600">{((parseFloat(pedido.precio_total) || 0) - (parseFloat(pedido.entrega_cuenta) || 0)).toFixed(2)} €</span>
+
+            {/* Cargos Adicionales */}
+            <div className="space-y-2 pt-2 border-t border-gray-200">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-600 uppercase">Cargos Adicionales (Mantoncillo, etc.)</span>
+                <button
+                  type="button"
+                  onClick={() => setPedido({...pedido, cargosExtra: [...pedido.cargosExtra, { concepto: '', precio: '' }]})}
+                  className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded-lg flex items-center gap-1"
+                >
+                  + Añadir concepto
+                </button>
+              </div>
+
+              {pedido.cargosExtra.map((cargo, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    placeholder="Concepto (Ej. Mantoncillo)..."
+                    className="flex-1 p-2 border rounded-lg text-sm outline-none bg-white"
+                    value={cargo.concepto}
+                    onChange={e => {
+                      const newC = [...pedido.cargosExtra];
+                      newC[idx].concepto = e.target.value;
+                      setPedido({...pedido, cargosExtra: newC});
+                    }}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="€"
+                    className="w-28 p-2 border rounded-lg text-sm outline-none font-semibold text-right bg-white"
+                    value={cargo.precio}
+                    onChange={e => {
+                      const newC = [...pedido.cargosExtra];
+                      newC[idx].precio = e.target.value;
+                      setPedido({...pedido, cargosExtra: newC});
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newC = pedido.cargosExtra.filter((_, i) => i !== idx);
+                      setPedido({...pedido, cargosExtra: newC});
+                    }}
+                    className="text-red-500 font-bold text-sm px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-gray-200 space-y-2">
+              <div className="flex justify-between items-center text-sm font-semibold text-gray-700">
+                <span>PRECIO TOTAL DEL PEDIDO:</span>
+                <span className="text-lg font-bold text-gray-900">{calcularPrecioTotal().toFixed(2)} €</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                <span className="font-bold text-gray-600 uppercase text-sm">Restante por pagar:</span>
+                <span className="text-2xl font-black text-rose-600">{(calcularPrecioTotal() - (parseFloat(pedido.entrega_cuenta) || 0)).toFixed(2)} €</span>
+              </div>
             </div>
           </div>
 

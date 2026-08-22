@@ -17,7 +17,16 @@ export function VistaPedidos() {
   const [nuevoPago, setNuevoPago] = useState('');
   const [loadingPago, setLoadingPago] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ descripcion: '', fabricante: '', tipo_articulo: 'SENORA', pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', talla: '', detalles_tejido: '', precio_total: '' });
+  const [editForm, setEditForm] = useState({
+    descripcion: '', fabricante: '', tipo_articulo: 'SENORA',
+    pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', talla: '',
+    numTejidos: 1, tejido1: '', tejido2: '', tejido3: '', tejidoCancan: '', colorCordoncillo: '',
+    precioTraje: '', cargosExtra: [] as Array<{ concepto: string; precio: string }>,
+    detalles_tejido: '', precio_total: ''
+  });
+  const [nuevoCargoConcepto, setNuevoCargoConcepto] = useState('');
+  const [nuevoCargoPrecio, setNuevoCargoPrecio] = useState('');
+  const [loadingCargo, setLoadingCargo] = useState(false);
   const [editPagos, setEditPagos] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
@@ -125,15 +134,25 @@ export function VistaPedidos() {
 
   const iniciarEdicion = () => {
     if (!pedidoSeleccionado) return;
+    const m = pedidoSeleccionado.medidas || {};
     setEditForm({
-      descripcion: pedidoSeleccionado.descripcion || (pedidoSeleccionado.detalles_tejido && pedidoSeleccionado.detalles_tejido.split(' | ')[0]) || '',
+      descripcion: pedidoSeleccionado.descripcion || m.modelo || (pedidoSeleccionado.detalles_tejido && pedidoSeleccionado.detalles_tejido.split(' | ')[0]) || '',
       fabricante: pedidoSeleccionado.fabricante || '',
-      tipo_articulo: pedidoSeleccionado.medidas?.tipo_articulo || 'SENORA',
-      pecho: pedidoSeleccionado.medidas?.pecho || '', cintura: pedidoSeleccionado.medidas?.cintura || '',
-      cadera: pedidoSeleccionado.medidas?.cadera || '', manga: pedidoSeleccionado.medidas?.manga || '',
-      talle: pedidoSeleccionado.medidas?.talle || '', largo_total: pedidoSeleccionado.medidas?.largo_total || '',
-      contorno_brazo: pedidoSeleccionado.medidas?.contorno_brazo || '', talla: pedidoSeleccionado.medidas?.talla || '',
-      detalles_tejido: getObs(pedidoSeleccionado), precio_total: pedidoSeleccionado.precio_total.toString()
+      tipo_articulo: m.tipo_articulo || 'SENORA',
+      pecho: m.pecho || '', cintura: m.cintura || '',
+      cadera: m.cadera || '', manga: m.manga || '',
+      talle: m.talle || '', largo_total: m.largo_total || '',
+      contorno_brazo: m.contorno_brazo || '', talla: m.talla || '',
+      numTejidos: m.numTejidos || 1,
+      tejido1: m.tejido1 || '',
+      tejido2: m.tejido2 || '',
+      tejido3: m.tejido3 || '',
+      tejidoCancan: m.tejidoCancan || '',
+      colorCordoncillo: m.colorCordoncillo || '',
+      precioTraje: m.precioTraje !== undefined ? m.precioTraje.toString() : pedidoSeleccionado.precio_total.toString(),
+      cargosExtra: Array.isArray(m.cargosExtra) ? m.cargosExtra : [],
+      detalles_tejido: getObs(pedidoSeleccionado),
+      precio_total: pedidoSeleccionado.precio_total.toString()
     });
     const pMap: any = {};
     pagos.forEach(p => pMap[p.id] = p.monto_entrega_cuenta.toString());
@@ -144,10 +163,39 @@ export function VistaPedidos() {
   const guardarEdicion = async () => {
     if (!pedidoSeleccionado) return;
     if (!window.confirm("¡Atención! Vas a modificar los datos de este pedido. ¿Confirmas los cambios?")) return;
-    const upMed = { ...pedidoSeleccionado.medidas, tipo_articulo: editForm.tipo_articulo, pecho: editForm.pecho, cintura: editForm.cintura, cadera: editForm.cadera, manga: editForm.manga, talle: editForm.talle, largo_total: editForm.largo_total, contorno_brazo: editForm.contorno_brazo, talla: editForm.talla };
+
+    const tejidosList = [];
+    if (editForm.tejido1.trim()) tejidosList.push(`Tejido 1: ${editForm.tejido1.trim()}`);
+    if (editForm.numTejidos >= 2 && editForm.tejido2.trim()) tejidosList.push(`Tejido 2: ${editForm.tejido2.trim()}`);
+    if (editForm.numTejidos >= 3 && editForm.tejido3.trim()) tejidosList.push(`Tejido 3: ${editForm.tejido3.trim()}`);
+    if (editForm.tejidoCancan.trim()) tejidosList.push(`Tejido Can Can: ${editForm.tejidoCancan.trim()}`);
+    if (editForm.colorCordoncillo.trim()) tejidosList.push(`Color Cordoncillo: ${editForm.colorCordoncillo.trim()}`);
+    const tejidosStr = tejidosList.join(' | ');
+
+    const upMed = {
+      ...pedidoSeleccionado.medidas,
+      modelo: editForm.descripcion,
+      tipo_articulo: editForm.tipo_articulo,
+      pecho: editForm.pecho, cintura: editForm.cintura, cadera: editForm.cadera,
+      manga: editForm.manga, talle: editForm.talle, largo_total: editForm.largo_total,
+      contorno_brazo: editForm.contorno_brazo, talla: editForm.talla,
+      numTejidos: editForm.numTejidos,
+      tejido1: editForm.tejido1,
+      tejido2: editForm.tejido2,
+      tejido3: editForm.tejido3,
+      tejidoCancan: editForm.tejidoCancan,
+      colorCordoncillo: editForm.colorCordoncillo,
+      observaciones: editForm.detalles_tejido
+    };
     const upPrecio = parseFloat(editForm.precio_total) || 0;
-    const combinedDetalles = editForm.descripcion + (editForm.detalles_tejido ? ' | ' + editForm.detalles_tejido : '');
-    const { error } = await supabase.from('pedidos').update({ fabricante: editForm.fabricante, medidas: upMed, detalles_tejido: combinedDetalles, precio_total: upPrecio }).eq('id', pedidoSeleccionado.id);
+    const combinedDetalles = (editForm.tipo_articulo === 'SENORA' || editForm.tipo_articulo === 'NINA' ? '[' + editForm.tipo_articulo + '] ' : '') + (editForm.descripcion ? 'Modelo: ' + editForm.descripcion : '') + (tejidosStr ? ' | ' + tejidosStr : '') + (editForm.detalles_tejido ? ' | ' + editForm.detalles_tejido : '');
+
+    const { error } = await supabase.from('pedidos').update({
+      fabricante: editForm.fabricante,
+      medidas: upMed,
+      detalles_tejido: combinedDetalles,
+      precio_total: upPrecio
+    }).eq('id', pedidoSeleccionado.id);
     
     // Update pagos
     for (const p of pagos) {
@@ -160,7 +208,7 @@ export function VistaPedidos() {
     if (updatedPagos) setPagos(updatedPagos);
 
     if (!error) {
-      const pNew = { ...pedidoSeleccionado, descripcion: editForm.descripcion, fabricante: editForm.fabricante, medidas: upMed, detalles_tejido: combinedDetalles, precio_total: upPrecio };
+      const pNew = { ...pedidoSeleccionado, fabricante: editForm.fabricante, medidas: upMed, detalles_tejido: combinedDetalles, precio_total: upPrecio };
       setPedidoSeleccionado(pNew);
       setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
       setIsEditing(false);
@@ -180,12 +228,82 @@ export function VistaPedidos() {
       setNuevoPago('');
     } catch (err: any) { alert('Error: ' + err.message); } finally { setLoadingPago(false); }
   };
+  const guardarNuevoCargoExtra = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pedidoSeleccionado || !nuevoCargoConcepto.trim() || !nuevoCargoPrecio) return;
+    const precioNum = parseFloat(nuevoCargoPrecio);
+    if (isNaN(precioNum) || precioNum <= 0) return;
+
+    setLoadingCargo(true);
+    try {
+      const med = pedidoSeleccionado.medidas || {};
+      const cargosActuales = Array.isArray(med.cargosExtra) ? med.cargosExtra : [];
+      const nuevosCargos = [...cargosActuales, { concepto: nuevoCargoConcepto.trim(), precio: precioNum.toString() }];
+
+      const pTraje = parseFloat(med.precioTraje) || Number(pedidoSeleccionado.precio_total);
+      const sumaExtras = nuevosCargos.reduce((acc: number, c: any) => acc + (parseFloat(c.precio) || 0), 0);
+      const nuevoPrecioTotal = pTraje + sumaExtras;
+
+      const nuevasMedidas = {
+        ...med,
+        precioTraje: med.precioTraje !== undefined && med.precioTraje !== '' ? med.precioTraje : pTraje.toString(),
+        cargosExtra: nuevosCargos
+      };
+
+      const { error } = await supabase.from('pedidos').update({
+        medidas: nuevasMedidas,
+        precio_total: nuevoPrecioTotal
+      }).eq('id', pedidoSeleccionado.id);
+
+      if (error) throw error;
+
+      const pUpdated = {
+        ...pedidoSeleccionado,
+        medidas: nuevasMedidas,
+        precio_total: nuevoPrecioTotal
+      };
+      setPedidoSeleccionado(pUpdated);
+      setPedidos(pedidos.map(p => p.id === pUpdated.id ? pUpdated : p));
+      setNuevoCargoConcepto('');
+      setNuevoCargoPrecio('');
+    } catch (err: any) {
+      alert('Error al añadir cargo: ' + err.message);
+    } finally {
+      setLoadingCargo(false);
+    }
+  };
+
+  const eliminarCargoExtra = async (idx: number) => {
+    if (!pedidoSeleccionado) return;
+    if (!window.confirm("¿Deseas eliminar este cargo adicional?")) return;
+    const med = pedidoSeleccionado.medidas || {};
+    const cargosActuales = Array.isArray(med.cargosExtra) ? med.cargosExtra : [];
+    const nuevosCargos = cargosActuales.filter((_: any, i: number) => i !== idx);
+
+    const pTraje = parseFloat(med.precioTraje) || Number(pedidoSeleccionado.precio_total);
+    const sumaExtras = nuevosCargos.reduce((acc: number, c: any) => acc + (parseFloat(c.precio) || 0), 0);
+    const nuevoPrecioTotal = pTraje + sumaExtras;
+
+    const nuevasMedidas = { ...med, cargosExtra: nuevosCargos };
+
+    const { error } = await supabase.from('pedidos').update({
+      medidas: nuevasMedidas,
+      precio_total: nuevoPrecioTotal
+    }).eq('id', pedidoSeleccionado.id);
+
+    if (!error) {
+      const pUpdated = { ...pedidoSeleccionado, medidas: nuevasMedidas, precio_total: nuevoPrecioTotal };
+      setPedidoSeleccionado(pUpdated);
+      setPedidos(pedidos.map(p => p.id === pUpdated.id ? pUpdated : p));
+    }
+  };
 
   const handleAtras = () => { if (paso === 3) setPaso(2); else if (paso === 2) setPaso(1); else { localStorage.clear(); navigate('/'); } };
   const handleAdelante = () => { if (paso === 1 && clienteSeleccionado) setPaso(2); else if (paso === 2 && pedidoSeleccionado) setPaso(3); };
   
   const totalPagado = pagos.reduce((acc, p) => acc + Number(p.monto_entrega_cuenta), 0);
-  const restante = pedidoSeleccionado ? Number(isEditing ? editForm.precio_total : pedidoSeleccionado.precio_total) - totalPagado : 0;
+  const totalPrecioCalculado = isEditing ? ((parseFloat(editForm.precioTraje) || 0) + editForm.cargosExtra.reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0)) : (pedidoSeleccionado ? Number(pedidoSeleccionado.precio_total) : 0);
+  const restante = pedidoSeleccionado ? totalPrecioCalculado - totalPagado : 0;
 
   const getDesc = (p: Pedido | null) => {
     if (!p) return '';
@@ -193,10 +311,15 @@ export function VistaPedidos() {
   };
 
   const getObs = (p: Pedido | null) => {
-    if (!p || !p.detalles_tejido) return '';
-    if (p.detalles_tejido.includes(' | ')) return p.detalles_tejido.split(' | ').slice(1).join(' | ');
-    if (p.descripcion && p.detalles_tejido === p.descripcion) return ''; // Es la misma descripción
-    return p.detalles_tejido;
+    if (!p) return '';
+    if (p.medidas?.observaciones !== undefined) return p.medidas.observaciones;
+    if (!p.detalles_tejido) return '';
+    const parts = p.detalles_tejido.split(' | ');
+    const last = parts[parts.length - 1];
+    if (parts.length > 1 && !last.startsWith('Tejido') && !last.startsWith('Color') && !last.startsWith('[')) {
+      return last;
+    }
+    return '';
   };
   const getSugerenciaTallaVista = (medida: string, valor: any, p: Pedido | null) => {
     const v = parseFloat(valor) || 0;
@@ -311,7 +434,7 @@ export function VistaPedidos() {
       {paso === 1 && (
         <div className="space-y-6 animate-fadeIn">
           <div className="relative"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400"><Search size={24} /></div><input type="text" placeholder="Buscar..." className="w-full pl-12 p-4 border-2 border-gray-100 rounded-xl outline-none text-lg focus:border-rose-300" value={busqueda} onChange={e => setBusqueda(e.target.value)} /></div>
-          <div className="space-y-2">{clientes.length > 0 ? clientes.map(c => (<div key={c.id} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-center" onClick={() => seleccionarCliente(c)}><div className="bg-rose-50 p-3 rounded-full mr-4 text-rose-500"><User size={24} /></div><div><p className="font-bold text-gray-800 text-lg">{c.apellidos}, {c.nombre}</p><p className="text-gray-500 text-sm">{c.telefono}</p></div></div>)) : busqueda.length > 2 && <p className="text-center text-gray-500 py-8">No se encontraron clientes.</p>}</div>
+          <div className="space-y-2">{clientes.length > 0 ? clientes.map(c => (<div key={c.id} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-center" onClick={() => seleccionarCliente(c)}><div className="bg-rose-50 p-3 rounded-full mr-4 text-rose-500"><User size={24} /></div><div><p className="font-bold text-gray-800 text-lg">{c.apellidos}, {c.nombre}</p><p className="text-gray-500 text-sm">{c.telefono}</p></div></div>)) : busqueda.trim().length >= 2 && <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm font-medium text-center">⚠️ No se encontró ningún cliente con "{busqueda}".</div>}</div>
           
           {!busqueda && todosLosPedidos.length > 0 && (
             <div className="mt-8 border-t border-gray-100 pt-6">
@@ -423,6 +546,86 @@ export function VistaPedidos() {
                 )}
               </div>
             </div>
+
+            {/* Sección Tejidos */}
+            <div className="mt-4 bg-rose-50/50 p-4 rounded-xl border border-rose-100 space-y-3">
+              <span className="text-xs md:text-sm font-bold text-rose-800 uppercase block">Tejidos y Detalle</span>
+              
+              {isEditing ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido del traje</label>
+                    <select
+                      className="w-full p-2 border border-rose-200 rounded-lg outline-none font-semibold bg-white"
+                      value={editForm.numTejidos}
+                      onChange={e => setEditForm({...editForm, numTejidos: Number(e.target.value)})}
+                    >
+                      <option value={1}>1 Tejido</option>
+                      <option value={2}>2 Tejidos</option>
+                      <option value={3}>3 Tejidos</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 1</label>
+                      <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejido1} onChange={e => setEditForm({...editForm, tejido1: e.target.value})} placeholder="Tejido 1..." />
+                    </div>
+                    {editForm.numTejidos >= 2 && (
+                      <div>
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 2</label>
+                        <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejido2} onChange={e => setEditForm({...editForm, tejido2: e.target.value})} placeholder="Tejido 2..." />
+                      </div>
+                    )}
+                    {editForm.numTejidos >= 3 && (
+                      <div>
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 3</label>
+                        <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejido3} onChange={e => setEditForm({...editForm, tejido3: e.target.value})} placeholder="Tejido 3..." />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2 border-t border-rose-100">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido del Can Can</label>
+                      <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejidoCancan} onChange={e => setEditForm({...editForm, tejidoCancan: e.target.value})} placeholder="Can Can..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Color del Cordoncillo</label>
+                      <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.colorCordoncillo} onChange={e => setEditForm({...editForm, colorCordoncillo: e.target.value})} placeholder="Cordoncillo..." />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-800 font-medium">
+                  <div>
+                    <span className="font-bold text-rose-900">Tejido 1: </span>
+                    <span>{pedidoSeleccionado.medidas?.tejido1 || '-'}</span>
+                  </div>
+                  {(pedidoSeleccionado.medidas?.numTejidos >= 2 || pedidoSeleccionado.medidas?.tejido2) && (
+                    <div>
+                      <span className="font-bold text-rose-900">Tejido 2: </span>
+                      <span>{pedidoSeleccionado.medidas?.tejido2 || '-'}</span>
+                    </div>
+                  )}
+                  {(pedidoSeleccionado.medidas?.numTejidos >= 3 || pedidoSeleccionado.medidas?.tejido3) && (
+                    <div>
+                      <span className="font-bold text-rose-900">Tejido 3: </span>
+                      <span>{pedidoSeleccionado.medidas?.tejido3 || '-'}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-bold text-rose-900">Tejido Can Can: </span>
+                    <span>{pedidoSeleccionado.medidas?.tejidoCancan || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="font-bold text-rose-900">Color Cordoncillo: </span>
+                    <span>{pedidoSeleccionado.medidas?.colorCordoncillo || '-'}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {isEditing ? (
               <textarea className="mt-4 w-full p-3 border rounded-xl text-xl md:text-2xl font-normal text-gray-800 outline-none focus:border-rose-300 h-32" value={editForm.detalles_tejido} onChange={e => setEditForm({...editForm, detalles_tejido: e.target.value})} placeholder="Observaciones..."></textarea>
             ) : getObs(pedidoSeleccionado) ? (
@@ -430,11 +633,58 @@ export function VistaPedidos() {
             ) : null}
           </div>
 
-          <div className="bg-rose-50/50 border-2 border-rose-100 rounded-2xl p-6">
-            <h4 className="font-bold text-rose-800 uppercase text-sm border-b border-rose-200 pb-2 mb-4">Control Económico</h4>
-            <div className="flex justify-between text-gray-600 mb-4 items-center">
-              <span>Precio Total:</span>
-              {isEditing ? <input type="number" step="0.01" className="p-1 border-b-2 border-rose-200 bg-transparent text-right font-bold text-gray-800 text-lg outline-none focus:border-rose-500" value={editForm.precio_total} onChange={e => setEditForm({...editForm, precio_total: e.target.value})} /> : <span className="font-bold text-gray-800">{Number(pedidoSeleccionado.precio_total).toFixed(2)} €</span>}
+          <div className="bg-rose-50/50 border-2 border-rose-100 rounded-2xl p-6 space-y-3">
+            <h4 className="font-bold text-rose-800 uppercase text-sm border-b border-rose-200 pb-2">Control Económico</h4>
+            
+            <div className="flex justify-between text-gray-700 items-center text-sm font-semibold">
+              <span>Precio Traje:</span>
+              {isEditing ? (
+                <input type="number" step="0.01" className="p-1 border-b-2 border-rose-300 bg-white rounded text-right font-bold text-gray-800 outline-none focus:border-rose-500 w-28" value={editForm.precioTraje} onChange={e => setEditForm({...editForm, precioTraje: e.target.value})} />
+              ) : (
+                <span className="font-bold text-gray-800">{Number(pedidoSeleccionado.medidas?.precioTraje !== undefined && pedidoSeleccionado.medidas?.precioTraje !== '' ? pedidoSeleccionado.medidas.precioTraje : pedidoSeleccionado.precio_total).toFixed(2)} €</span>
+              )}
+            </div>
+
+            {/* Cargos Adicionales */}
+            <div className="border-t border-rose-200 pt-2 space-y-2">
+              <span className="text-xs font-bold text-rose-700 uppercase block">Cargos Adicionales (Mantoncillo, etc.)</span>
+
+              {isEditing ? (
+                <>
+                  {editForm.cargosExtra.map((cargo, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <input type="text" placeholder="Ej. Mantoncillo..." className="flex-1 p-1.5 border rounded text-xs outline-none bg-white" value={cargo.concepto} onChange={e => { const newC = [...editForm.cargosExtra]; newC[idx].concepto = e.target.value; setEditForm({...editForm, cargosExtra: newC}); }} />
+                      <input type="number" step="0.01" placeholder="€" className="w-20 p-1.5 border rounded text-xs outline-none font-semibold text-right bg-white" value={cargo.precio} onChange={e => { const newC = [...editForm.cargosExtra]; newC[idx].precio = e.target.value; setEditForm({...editForm, cargosExtra: newC}); }} />
+                      <button type="button" onClick={() => { const newC = editForm.cargosExtra.filter((_, i) => i !== idx); setEditForm({...editForm, cargosExtra: newC}); }} className="text-red-500 font-bold text-xs">✕</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setEditForm({...editForm, cargosExtra: [...editForm.cargosExtra, { concepto: '', precio: '' }]})} className="text-xs font-bold text-rose-600 bg-white hover:bg-rose-100 px-2 py-1 rounded border border-rose-200 flex items-center gap-1 w-full justify-center mt-1">+ Añadir concepto</button>
+                </>
+              ) : (
+                <>
+                  {(pedidoSeleccionado.medidas?.cargosExtra || []).map((cargo: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center text-xs text-gray-700 font-medium pl-2 bg-white p-1.5 rounded border border-rose-100">
+                      <span>+ {cargo.concepto || 'Cargo adicional'}:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-900">{Number(cargo.precio || 0).toFixed(2)} €</span>
+                        <button type="button" onClick={() => eliminarCargoExtra(idx)} className="text-red-400 hover:text-red-600 font-bold ml-1">✕</button>
+                      </div>
+                    </div>
+                  ))}
+                  <form onSubmit={guardarNuevoCargoExtra} className="flex gap-2 items-center pt-1">
+                    <input type="text" placeholder="Ej. Mantoncillo..." className="flex-1 p-2 border rounded-lg text-xs outline-none bg-white focus:border-rose-400 font-medium" value={nuevoCargoConcepto} onChange={e => setNuevoCargoConcepto(e.target.value)} />
+                    <input type="number" step="0.01" inputMode="decimal" placeholder="Precio (€)" className="w-24 p-2 border rounded-lg text-xs outline-none font-semibold text-right bg-white focus:border-rose-400" value={nuevoCargoPrecio} onChange={e => setNuevoCargoPrecio(e.target.value)} />
+                    <button type="submit" disabled={loadingCargo || !nuevoCargoConcepto.trim() || !nuevoCargoPrecio} className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1">
+                      + Añadir concepto
+                    </button>
+                  </form>
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-between text-gray-900 font-bold pt-2 border-t border-rose-200 items-center">
+              <span>PRECIO TOTAL DE PEDIDO:</span>
+              <span className="text-lg">{isEditing ? ((parseFloat(editForm.precioTraje) || 0) + editForm.cargosExtra.reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0)).toFixed(2) : Number(pedidoSeleccionado.precio_total).toFixed(2)} €</span>
             </div>
             <div className="border-t border-rose-200 pt-3">
               <p className="text-xs font-bold text-rose-600 uppercase mb-2">Entregas a cuenta:</p>
