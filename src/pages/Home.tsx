@@ -1,11 +1,11 @@
-import { QrCode, PlusCircle, Search, Users } from 'lucide-react';
+import { QrCode, PlusCircle, Search, Users, Ruler } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function Home() {
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-5xl">
-        <Link to="/nuevo-pedido" className="flex flex-col items-center justify-center p-8 bg-rose-600 text-white rounded-2xl shadow-lg hover:bg-rose-700 transition-colors transform hover:-translate-y-1">
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 w-full max-w-6xl">
+        <Link to="/nuevo-pedido" onClick={() => { localStorage.removeItem('paso'); localStorage.removeItem('clienteId'); }} className="flex flex-col items-center justify-center p-8 bg-rose-600 text-white rounded-2xl shadow-lg hover:bg-rose-700 transition-colors transform hover:-translate-y-1">
           <PlusCircle size={48} className="mb-4" />
           <span className="font-bold text-xl mb-1">ALTA</span>
           <span className="text-rose-200 text-sm">Nuevo Pedido</span>
@@ -22,6 +22,12 @@ export function Home() {
           <span className="font-bold text-xl mb-1">CLIENTES</span>
           <span className="text-gray-400 text-sm">Gestionar fichas</span>
         </Link>
+
+        <Link to="/tallas" className="flex flex-col items-center justify-center p-8 bg-white border-2 border-gray-100 text-gray-700 rounded-2xl shadow-lg hover:bg-gray-50 hover:border-rose-100 transition-colors transform hover:-translate-y-1">
+          <Ruler size={48} className="mb-4 text-amber-500" />
+          <span className="font-bold text-xl mb-1">TALLAS</span>
+          <span className="text-gray-400 text-sm">Guía de medidas</span>
+        </Link>
         
         <button className="flex flex-col items-center justify-center p-8 bg-gray-900 text-white rounded-2xl shadow-lg hover:bg-gray-800 transition-colors transform hover:-translate-y-1">
           <QrCode size={48} className="mb-4" />
@@ -32,3 +38,4 @@ export function Home() {
     </div>
   );
 }
+

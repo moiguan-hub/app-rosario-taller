@@ -3,6 +3,7 @@ import { Home } from './pages/Home';
 import { NuevoPedido } from './pages/NuevoPedido';
 import { VistaPedidos } from './pages/VistaPedidos';
 import { VistaClientes } from './pages/VistaClientes';
+import { VistaTallas } from './pages/VistaTallas';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
               <a href="/" className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Inicio</a>
               <a href="/pedidos" onClick={() => { localStorage.removeItem('paso'); localStorage.removeItem('clienteId'); localStorage.removeItem('pedidoId'); }} className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Consultas y Pedidos</a>
               <a href="/clientes" className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Clientes</a>
+              <a href="/tallas" className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Tallas</a>
             </nav>
           </div>
         </header>
@@ -25,6 +27,7 @@ function App() {
             <Route path="/nuevo-pedido" element={<NuevoPedido />} />
             <Route path="/pedidos" element={<VistaPedidos />} />
             <Route path="/clientes" element={<VistaClientes />} />
+            <Route path="/tallas" element={<VistaTallas />} />
           </Routes>
         </main>
       </div>

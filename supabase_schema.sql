@@ -18,6 +18,7 @@ CREATE TABLE pedidos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     categoria categoria_pedido NOT NULL DEFAULT 'FLAMENCA',
+    tipo_articulo TEXT,
     estado_ubicacion estado_ubicacion_pedido NOT NULL DEFAULT 'PEDIDO',
     estado_proceso estado_proceso_pedido NOT NULL DEFAULT 'PENDIENTE_LLEGADA',
     fabricante TEXT,

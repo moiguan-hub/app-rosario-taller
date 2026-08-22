@@ -17,7 +17,7 @@ export function VistaPedidos() {
   const [nuevoPago, setNuevoPago] = useState('');
   const [loadingPago, setLoadingPago] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ descripcion: '', fabricante: '', pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', detalles_tejido: '', precio_total: '' });
+  const [editForm, setEditForm] = useState({ descripcion: '', fabricante: '', tipo_articulo: 'SENORA', pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', talla: '', detalles_tejido: '', precio_total: '' });
   const [editPagos, setEditPagos] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
@@ -128,9 +128,11 @@ export function VistaPedidos() {
     setEditForm({
       descripcion: pedidoSeleccionado.descripcion || (pedidoSeleccionado.detalles_tejido && pedidoSeleccionado.detalles_tejido.split(' | ')[0]) || '',
       fabricante: pedidoSeleccionado.fabricante || '',
+      tipo_articulo: pedidoSeleccionado.medidas?.tipo_articulo || 'SENORA',
       pecho: pedidoSeleccionado.medidas?.pecho || '', cintura: pedidoSeleccionado.medidas?.cintura || '',
       cadera: pedidoSeleccionado.medidas?.cadera || '', manga: pedidoSeleccionado.medidas?.manga || '',
       talle: pedidoSeleccionado.medidas?.talle || '', largo_total: pedidoSeleccionado.medidas?.largo_total || '',
+      contorno_brazo: pedidoSeleccionado.medidas?.contorno_brazo || '', talla: pedidoSeleccionado.medidas?.talla || '',
       detalles_tejido: getObs(pedidoSeleccionado), precio_total: pedidoSeleccionado.precio_total.toString()
     });
     const pMap: any = {};
@@ -142,7 +144,7 @@ export function VistaPedidos() {
   const guardarEdicion = async () => {
     if (!pedidoSeleccionado) return;
     if (!window.confirm("¡Atención! Vas a modificar los datos de este pedido. ¿Confirmas los cambios?")) return;
-    const upMed = { ...pedidoSeleccionado.medidas, pecho: editForm.pecho, cintura: editForm.cintura, cadera: editForm.cadera, manga: editForm.manga, talle: editForm.talle, largo_total: editForm.largo_total };
+    const upMed = { ...pedidoSeleccionado.medidas, tipo_articulo: editForm.tipo_articulo, pecho: editForm.pecho, cintura: editForm.cintura, cadera: editForm.cadera, manga: editForm.manga, talle: editForm.talle, largo_total: editForm.largo_total, contorno_brazo: editForm.contorno_brazo, talla: editForm.talla };
     const upPrecio = parseFloat(editForm.precio_total) || 0;
     const combinedDetalles = editForm.descripcion + (editForm.detalles_tejido ? ' | ' + editForm.detalles_tejido : '');
     const { error } = await supabase.from('pedidos').update({ fabricante: editForm.fabricante, medidas: upMed, detalles_tejido: combinedDetalles, precio_total: upPrecio }).eq('id', pedidoSeleccionado.id);
@@ -195,6 +197,90 @@ export function VistaPedidos() {
     if (p.detalles_tejido.includes(' | ')) return p.detalles_tejido.split(' | ').slice(1).join(' | ');
     if (p.descripcion && p.detalles_tejido === p.descripcion) return ''; // Es la misma descripción
     return p.detalles_tejido;
+  };
+  const getSugerenciaTallaVista = (medida: string, valor: any, p: Pedido | null) => {
+    const v = parseFloat(valor) || 0;
+    if (!v || !p) return null;
+    const fab = p.fabricante || '';
+    const tipo = p.medidas?.tipo_articulo || (p.detalles_tejido?.includes('[NINA]') ? 'NINA' : 'SENORA');
+
+    if (fab.includes('Aires de Ferias') || fab.includes('Aires de Feria')) {
+      if (tipo === 'SENORA') {
+        const tallas = [
+          { t: '32', p: 77, c: 56, ca: 84, l: 140 },
+          { t: '34', p: 81, c: 60, ca: 88, l: 146 },
+          { t: '36', p: 85, c: 65, ca: 92, l: 146 },
+          { t: '38', p: 88, c: 70, ca: 97, l: 146 },
+          { t: '40', p: 93, c: 74, ca: 101, l: 146 },
+          { t: '42', p: 97, c: 78, ca: 105, l: 146 },
+          { t: '44', p: 102, c: 82, ca: 108, l: 146 },
+          { t: '46', p: 106, c: 87, ca: 112, l: 146 },
+          { t: '48', p: 110, c: 91, ca: 116, l: 146 },
+          { t: '50', p: 114, c: 96, ca: 120, l: 146 },
+          { t: '52', p: 118, c: 100, ca: 124, l: 146 },
+          { t: '54', p: 122, c: 105, ca: 128, l: 146 },
+          { t: '56', p: 126, c: 109, ca: 132, l: 146 },
+          { t: '58', p: 130, c: 114, ca: 136, l: 146 },
+          { t: '60', p: 134, c: 118, ca: 140, l: 146 }
+        ];
+        const prop = medida === 'pecho' ? 'p' : medida === 'cintura' ? 'c' : medida === 'cadera' ? 'ca' : medida === 'largo_total' ? 'l' : null;
+        if (!prop) return null;
+        for (const size of tallas) { if (v <= (size as any)[prop]) return size.t; }
+        return 'TEsp';
+      } else if (tipo === 'NINA') {
+        const tallas = [
+          { t: '1', p: 50, c: 47, ca: 52, l: 63 },
+          { t: '2', p: 54, c: 49, ca: 57, l: 69 },
+          { t: '3', p: 58, c: 53, ca: 62, l: 77 },
+          { t: '4', p: 60, c: 56, ca: 66, l: 85 },
+          { t: '5', p: 64, c: 59, ca: 70, l: 95 },
+          { t: '6', p: 66, c: 62, ca: 72, l: 105 },
+          { t: '7', p: 71, c: 64, ca: 74, l: 113 },
+          { t: '8', p: 75, c: 66, ca: 84, l: 120 },
+          { t: '9', p: 78, c: 68, ca: 86, l: 127 },
+          { t: '14', p: 82, c: 68, ca: 86, l: 135 }
+        ];
+        const prop = medida === 'pecho' ? 'p' : medida === 'cintura' ? 'c' : medida === 'cadera' ? 'ca' : medida === 'largo_total' ? 'l' : null;
+        if (!prop) return null;
+        for (const size of tallas) { if (v <= (size as any)[prop]) return size.t; }
+        return 'TEsp';
+      }
+    } else if (fab.includes('Ana Barroso')) {
+      if (tipo === 'SENORA') {
+        const tallas = [
+          { t: '36', p: 80, c: 61, ca: 85 },
+          { t: '38', p: 84, c: 65, ca: 89 },
+          { t: '40', p: 87, c: 69, ca: 92 },
+          { t: '42', p: 91, c: 73, ca: 97 },
+          { t: '44', p: 94, c: 76, ca: 100 },
+          { t: '46', p: 98, c: 80, ca: 105 },
+          { t: '48', p: 103, c: 85, ca: 109 },
+          { t: '50', p: 108, c: 90, ca: 115 },
+          { t: '52', p: 114, c: 96, ca: 120 }
+        ];
+        const prop = medida === 'pecho' ? 'p' : medida === 'cintura' ? 'c' : medida === 'cadera' ? 'ca' : null;
+        if (!prop) return null;
+        for (const size of tallas) { if (v <= (size as any)[prop]) return size.t; }
+        return 'TEsp';
+      } else if (tipo === 'NINA') {
+        const tallas = [
+          { t: '1', p: 52, c: 46, ca: 54, l: 71 },
+          { t: '2', p: 55, c: 49, ca: 57, l: 79 },
+          { t: '3', p: 58, c: 52, ca: 60, l: 87 },
+          { t: '4', p: 61, c: 55, ca: 63, l: 94 },
+          { t: '5', p: 64, c: 58, ca: 66, l: 101 },
+          { t: '6', p: 67, c: 61, ca: 69, l: 110 },
+          { t: '7', p: 70, c: 64, ca: 72, l: 119 },
+          { t: '9', p: 76, c: 67, ca: 76, l: 132 },
+          { t: '12', p: 84, c: 71, ca: 82, l: 140 }
+        ];
+        const prop = medida === 'pecho' ? 'p' : medida === 'cintura' ? 'c' : medida === 'cadera' ? 'ca' : medida === 'largo_total' ? 'l' : null;
+        if (!prop) return null;
+        for (const size of tallas) { if (v <= (size as any)[prop]) return size.t; }
+        return 'TEsp';
+      }
+    }
+    return null;
   };
 
 
@@ -301,13 +387,41 @@ export function VistaPedidos() {
               )}
             </div>
             
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-              {['pecho', 'cintura', 'cadera', 'manga', 'talle', 'largo_total'].map((m: string) => (
-                <div key={m} className="bg-gray-50 border border-gray-100 p-2 rounded-xl text-center flex flex-col items-center">
-                  <p className="text-xs md:text-sm font-bold text-gray-500 uppercase w-full">{m.replace('_', ' ')}</p>
-                  {isEditing ? <input type="number" inputMode="decimal" className="w-full text-center mt-1 p-1 border rounded font-bold text-gray-800 outline-none focus:border-rose-300 text-xl" value={(editForm as any)[m]} onChange={e => setEditForm({...editForm, [m]: e.target.value})} /> : <p className="text-2xl md:text-3xl font-black text-gray-800">{pedidoSeleccionado.medidas?.[m] || '-'}</p>}
-                </div>
-              ))}
+            <div className="grid grid-cols-4 gap-2.5">
+              {['pecho', 'cintura', 'cadera', 'manga', 'talle', 'largo_total', 'contorno_brazo'].map((m: string) => {
+                const sug = getSugerenciaTallaVista(m, isEditing ? (editForm as any)[m] : pedidoSeleccionado.medidas?.[m], pedidoSeleccionado);
+                return (
+                  <div key={m} className="bg-gray-50 border border-gray-100 p-2.5 rounded-xl text-center flex flex-col items-center justify-between">
+                    <p className="text-xs font-bold text-gray-500 uppercase w-full whitespace-nowrap flex items-center justify-center gap-1">
+                      <span>{m.replace('_', ' ')}</span>
+                      {sug && <span className="text-xs font-black text-blue-600">(T{sug})</span>}
+                    </p>
+                    {isEditing ? <input type="number" inputMode="decimal" className="w-full text-center mt-1 p-1 border rounded font-bold text-gray-800 outline-none focus:border-rose-300 text-lg" value={(editForm as any)[m]} onChange={e => setEditForm({...editForm, [m]: e.target.value})} /> : <p className="text-xl md:text-2xl font-black text-gray-800 mt-1">{pedidoSeleccionado.medidas?.[m] || '-'}</p>}
+                  </div>
+                );
+              })}
+              
+              <div className="bg-rose-100/60 border border-rose-200 p-2.5 rounded-xl text-center flex flex-col items-center justify-between">
+                <p className="text-xs font-bold text-rose-800 uppercase w-full whitespace-nowrap">TALLA</p>
+                {isEditing ? (
+                  <select className="w-full text-center mt-1 p-1 border rounded font-bold text-rose-900 bg-white outline-none focus:border-rose-400 text-xs md:text-sm" value={editForm.talla} onChange={e => setEditForm({...editForm, talla: e.target.value})}>
+                    <option value="">-</option>
+                    {editForm.tipo_articulo === 'NINA' ? (
+                      <>
+                        {['1','2','3','4','5','6','7','8','9','12','14','TEsp'].map(t => <option key={t} value={t}>{t === 'TEsp' ? 'TEsp' : `T${t}`}</option>)}
+                      </>
+                    ) : (
+                      <>
+                        {['32','34','36','38','40','42','44','46','48','50','52','54','56','58','60','TEsp'].map(t => <option key={t} value={t}>{t === 'TEsp' ? 'TEsp' : `T${t}`}</option>)}
+                      </>
+                    )}
+                  </select>
+                ) : (
+                  <p className="text-xl md:text-2xl font-black text-rose-700 mt-1">
+                    {pedidoSeleccionado.medidas?.talla === 'TEspecial' ? 'TEsp' : pedidoSeleccionado.medidas?.talla || '-'}
+                  </p>
+                )}
+              </div>
             </div>
             {isEditing ? (
               <textarea className="mt-4 w-full p-3 border rounded-xl text-xl md:text-2xl font-normal text-gray-800 outline-none focus:border-rose-300 h-32" value={editForm.detalles_tejido} onChange={e => setEditForm({...editForm, detalles_tejido: e.target.value})} placeholder="Observaciones..."></textarea>

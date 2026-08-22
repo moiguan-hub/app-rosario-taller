@@ -16,6 +16,8 @@ export interface Pedido {
   cliente_id: string;
   descripcion: string;
   categoria: CategoriaPedido;
+  tipo_articulo?: 'NINA' | 'SENORA' | null;
+
   estado_ubicacion: EstadoUbicacion;
   estado_proceso: EstadoProceso;
   fabricante: string | null;
