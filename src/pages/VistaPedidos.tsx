@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone, MessageCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone, MessageCircle, PackageCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Cliente, Pedido, Pago } from '../types/database.types';
 
@@ -129,7 +129,25 @@ export function VistaPedidos() {
     if (!error) {
       setPedidoSeleccionado({ ...pedidoSeleccionado, estado_ubicacion: newState });
       setPedidos(pedidos.map(p => p.id === pedidoSeleccionado.id ? { ...p, estado_ubicacion: newState } : p));
+      setTodosLosPedidos(todosLosPedidos.map(p => p.id === pedidoSeleccionado.id ? { ...p, estado_ubicacion: newState } : p));
     } else alert('Error al actualizar: ' + error.message);
+  };
+
+  const toggleEstadoProceso = async () => {
+    if (!pedidoSeleccionado) return;
+    const isEntregado = pedidoSeleccionado.estado_proceso === 'ENTREGADO';
+    const newState = isEntregado ? 'PENDIENTE_LLEGADA' : 'ENTREGADO';
+    if (isEntregado) {
+      if (!window.confirm("¿Deseas desmarcar este pedido como ENTREGADO y ponerlo de nuevo en proceso?")) return;
+    } else {
+      if (!window.confirm("¿Confirmas que el pedido ha sido ENTREGADO / LLEVADO por el cliente?")) return;
+    }
+    const { error } = await supabase.from('pedidos').update({ estado_proceso: newState }).eq('id', pedidoSeleccionado.id);
+    if (!error) {
+      setPedidoSeleccionado({ ...pedidoSeleccionado, estado_proceso: newState });
+      setPedidos(pedidos.map(p => p.id === pedidoSeleccionado.id ? { ...p, estado_proceso: newState } : p));
+      setTodosLosPedidos(todosLosPedidos.map(p => p.id === pedidoSeleccionado.id ? { ...p, estado_proceso: newState } : p));
+    } else alert('Error al actualizar estado de entrega: ' + error.message);
   };
 
   const iniciarEdicion = () => {
@@ -448,11 +466,19 @@ export function VistaPedidos() {
                     <FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} />
                     <div className="flex-1 w-full min-w-0">
                       <p className="font-bold text-gray-800 text-lg break-words">{(p as any).clientes?.apellidos?.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase())}, {(p as any).clientes?.nombre?.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase())}</p>
-                      <p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || p.categoria}</p>
+                      <p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p>
                       <p className="text-base text-gray-500 mt-1 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p>
-                      <span className={`inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}
-                      </span>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {p.estado_proceso === 'ENTREGADO' ? (
+                          <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">
+                            ENTREGADO
+                          </span>
+                        ) : (
+                          <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -466,7 +492,7 @@ export function VistaPedidos() {
         <div className="space-y-6 animate-fadeIn">
           <div className="bg-gray-900 p-4 rounded-xl shadow-md text-white"><p className="text-xs text-gray-400 font-semibold uppercase mb-1">Cliente</p><p className="font-bold text-xl">{clienteSeleccionado.nombre} {clienteSeleccionado.apellidos}</p></div>
           <h3 className="font-bold text-gray-700 uppercase text-sm border-b pb-2">Historial ({pedidos.length})</h3>
-          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-start bg-white shadow-sm"><FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} /><div className="flex-1 w-full min-w-0"><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Sin descripción'}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p><p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p><span className={`inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span></div></div>))}</div>
+          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-start bg-white shadow-sm"><FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} /><div className="flex-1 w-full min-w-0"><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p><p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p><div className="flex flex-wrap gap-2 mt-2">{p.estado_proceso === 'ENTREGADO' ? <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">ENTREGADO</span> : <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span>}</div></div></div>))}</div>
         </div>
       )}
 
@@ -495,9 +521,16 @@ export function VistaPedidos() {
                 </>
               )}
             </div>
-            <button onClick={toggleEstadoUbicacion} className={`flex-shrink-0 flex items-center px-4 py-2 rounded-xl font-bold shadow-md transition-colors ${pedidoSeleccionado.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200' : 'bg-gray-900 text-white hover:bg-gray-800'}`}>
-              {pedidoSeleccionado.estado_ubicacion === 'STOCK' ? <><CheckCircle size={20} className="mr-2" /> EN TIENDA</> : <><Factory size={20} className="mr-2" /> FÁBRICA</>}
-            </button>
+            <div className="flex flex-wrap items-center gap-2 flex-shrink-0 w-full md:w-auto mt-2 md:mt-0">
+              <button onClick={toggleEstadoUbicacion} className={`flex-1 md:flex-initial flex items-center justify-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-colors ${pedidoSeleccionado.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200' : 'bg-gray-900 text-white hover:bg-gray-800'}`}>
+                {pedidoSeleccionado.estado_ubicacion === 'STOCK' ? <><CheckCircle size={18} className="mr-1.5 flex-shrink-0" /> EN TIENDA</> : <><Factory size={18} className="mr-1.5 flex-shrink-0" /> FÁBRICA</>}
+              </button>
+
+              <button onClick={toggleEstadoProceso} className={`flex-1 md:flex-initial flex items-center justify-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-colors ${pedidoSeleccionado.estado_proceso === 'ENTREGADO' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+                <PackageCheck size={18} className="mr-1.5 flex-shrink-0" />
+                {pedidoSeleccionado.estado_proceso === 'ENTREGADO' ? 'ENTREGADO' : 'MARCAR ENTREGADO'}
+              </button>
+            </div>
           </div>
 
           <div className="relative">
