@@ -307,7 +307,10 @@ export function VistaPedidos() {
 
   const getDesc = (p: Pedido | null) => {
     if (!p) return '';
-    return p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Sin descripción';
+    let raw = p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Sin descripción';
+    return raw.replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*\[(SENORA|NINA)\]\s*/i, '[$1] ')
+              .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*/i, '[$1] ')
+              .replace(/^Modelo:\s*/i, '');
   };
 
   const getObs = (p: Pedido | null) => {
@@ -487,8 +490,8 @@ export function VistaPedidos() {
                 </>
               ) : (
                 <>
-                  <h3 className="text-2xl font-black text-gray-800">{getDesc(pedidoSeleccionado)}</h3>
-                  <p className="text-gray-500 font-medium">{pedidoSeleccionado.categoria} | Pedido el {pedidoSeleccionado.fecha_pedido}{pedidoSeleccionado.fabricante ? ` | Fabricante: ${pedidoSeleccionado.fabricante}` : ''}</p>
+                  <h3 className="text-xl md:text-2xl font-black text-gray-800 break-words">{getDesc(pedidoSeleccionado)}</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-tight">{pedidoSeleccionado.categoria} | Pedido el {pedidoSeleccionado.fecha_pedido}{pedidoSeleccionado.fabricante ? ` | Fabricante: ${pedidoSeleccionado.fabricante}` : ''}</p>
                 </>
               )}
             </div>
@@ -510,22 +513,22 @@ export function VistaPedidos() {
               )}
             </div>
             
-            <div className="grid grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-2.5">
               {['pecho', 'cintura', 'cadera', 'manga', 'talle', 'largo_total', 'contorno_brazo'].map((m: string) => {
                 const sug = getSugerenciaTallaVista(m, isEditing ? (editForm as any)[m] : pedidoSeleccionado.medidas?.[m], pedidoSeleccionado);
                 return (
-                  <div key={m} className="bg-gray-50 border border-gray-100 p-2.5 rounded-xl text-center flex flex-col items-center justify-between">
-                    <p className="text-xs font-bold text-gray-500 uppercase w-full whitespace-nowrap flex items-center justify-center gap-1">
-                      <span>{m.replace('_', ' ')}</span>
-                      {sug && <span className="text-xs font-black text-blue-600">(T{sug})</span>}
+                  <div key={m} className="bg-gray-50 border border-gray-100 p-2.5 rounded-xl text-center flex flex-col items-center justify-between min-w-0">
+                    <p className="text-xs font-bold text-gray-500 uppercase w-full flex items-center justify-center gap-1 text-center">
+                      <span className="truncate">{m.replace('_', ' ')}</span>
+                      {sug && <span className="text-xs font-black text-blue-600 flex-shrink-0">(T{sug})</span>}
                     </p>
                     {isEditing ? <input type="number" inputMode="decimal" className="w-full text-center mt-1 p-1 border rounded font-bold text-gray-800 outline-none focus:border-rose-300 text-lg" value={(editForm as any)[m]} onChange={e => setEditForm({...editForm, [m]: e.target.value})} /> : <p className="text-xl md:text-2xl font-black text-gray-800 mt-1">{pedidoSeleccionado.medidas?.[m] || '-'}</p>}
                   </div>
                 );
               })}
               
-              <div className="bg-rose-100/60 border border-rose-200 p-2.5 rounded-xl text-center flex flex-col items-center justify-between">
-                <p className="text-xs font-bold text-rose-800 uppercase w-full whitespace-nowrap">TALLA</p>
+              <div className="bg-rose-100/60 border border-rose-200 p-2.5 rounded-xl text-center flex flex-col items-center justify-between min-w-0">
+                <p className="text-xs font-bold text-rose-800 uppercase w-full text-center">TALLA</p>
                 {isEditing ? (
                   <select className="w-full text-center mt-1 p-1 border rounded font-bold text-rose-900 bg-white outline-none focus:border-rose-400 text-xs md:text-sm" value={editForm.talla} onChange={e => setEditForm({...editForm, talla: e.target.value})}>
                     <option value="">-</option>
@@ -633,15 +636,15 @@ export function VistaPedidos() {
             ) : null}
           </div>
 
-          <div className="bg-rose-50/50 border-2 border-rose-100 rounded-2xl p-6 space-y-3">
+          <div className="bg-rose-50/50 border-2 border-rose-100 rounded-2xl p-4 sm:p-6 space-y-3">
             <h4 className="font-bold text-rose-800 uppercase text-sm border-b border-rose-200 pb-2">Control Económico</h4>
             
-            <div className="flex justify-between text-gray-700 items-center text-sm font-semibold">
+            <div className="flex justify-between text-gray-700 items-center text-sm font-semibold gap-2">
               <span>Precio Traje:</span>
               {isEditing ? (
-                <input type="number" step="0.01" className="p-1 border-b-2 border-rose-300 bg-white rounded text-right font-bold text-gray-800 outline-none focus:border-rose-500 w-28" value={editForm.precioTraje} onChange={e => setEditForm({...editForm, precioTraje: e.target.value})} />
+                <input type="number" step="0.01" className="p-1 border-b-2 border-rose-300 bg-white rounded text-right font-bold text-gray-800 outline-none focus:border-rose-500 w-24" value={editForm.precioTraje} onChange={e => setEditForm({...editForm, precioTraje: e.target.value})} />
               ) : (
-                <span className="font-bold text-gray-800">{Number(pedidoSeleccionado.medidas?.precioTraje !== undefined && pedidoSeleccionado.medidas?.precioTraje !== '' ? pedidoSeleccionado.medidas.precioTraje : pedidoSeleccionado.precio_total).toFixed(2)} €</span>
+                <span className="font-bold text-gray-800 whitespace-nowrap">{Number(pedidoSeleccionado.medidas?.precioTraje !== undefined && pedidoSeleccionado.medidas?.precioTraje !== '' ? pedidoSeleccionado.medidas.precioTraje : pedidoSeleccionado.precio_total).toFixed(2)} €</span>
               )}
             </div>
 
@@ -663,18 +666,20 @@ export function VistaPedidos() {
               ) : (
                 <>
                   {(pedidoSeleccionado.medidas?.cargosExtra || []).map((cargo: any, idx: number) => (
-                    <div key={idx} className="flex justify-between items-center text-xs text-gray-700 font-medium pl-2 bg-white p-1.5 rounded border border-rose-100">
-                      <span>+ {cargo.concepto || 'Cargo adicional'}:</span>
-                      <div className="flex items-center gap-2">
+                    <div key={idx} className="flex justify-between items-center text-xs text-gray-700 font-medium px-2 py-1.5 bg-white rounded-lg border border-rose-100 gap-2">
+                      <span className="truncate">+ {cargo.concepto || 'Cargo adicional'}:</span>
+                      <div className="flex items-center gap-2 whitespace-nowrap">
                         <span className="font-bold text-gray-900">{Number(cargo.precio || 0).toFixed(2)} €</span>
-                        <button type="button" onClick={() => eliminarCargoExtra(idx)} className="text-red-400 hover:text-red-600 font-bold ml-1">✕</button>
+                        <button type="button" onClick={() => eliminarCargoExtra(idx)} className="text-red-400 hover:text-red-600 font-bold ml-1 p-1">✕</button>
                       </div>
                     </div>
                   ))}
-                  <form onSubmit={guardarNuevoCargoExtra} className="flex gap-2 items-center pt-1">
-                    <input type="text" placeholder="Ej. Mantoncillo..." className="flex-1 p-2 border rounded-lg text-xs outline-none bg-white focus:border-rose-400 font-medium" value={nuevoCargoConcepto} onChange={e => setNuevoCargoConcepto(e.target.value)} />
-                    <input type="number" step="0.01" inputMode="decimal" placeholder="Precio (€)" className="w-24 p-2 border rounded-lg text-xs outline-none font-semibold text-right bg-white focus:border-rose-400" value={nuevoCargoPrecio} onChange={e => setNuevoCargoPrecio(e.target.value)} />
-                    <button type="submit" disabled={loadingCargo || !nuevoCargoConcepto.trim() || !nuevoCargoPrecio} className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1">
+                  <form onSubmit={guardarNuevoCargoExtra} className="flex flex-col gap-2 pt-1">
+                    <div className="flex gap-2">
+                      <input type="text" placeholder="Ej. Mantoncillo..." className="flex-1 min-w-0 p-2 border rounded-lg text-xs outline-none bg-white focus:border-rose-400 font-medium" value={nuevoCargoConcepto} onChange={e => setNuevoCargoConcepto(e.target.value)} />
+                      <input type="number" step="0.01" inputMode="decimal" placeholder="Precio (€)" className="w-24 min-w-[90px] p-2 border rounded-lg text-xs outline-none font-semibold text-right bg-white focus:border-rose-400" value={nuevoCargoPrecio} onChange={e => setNuevoCargoPrecio(e.target.value)} />
+                    </div>
+                    <button type="submit" disabled={loadingCargo || !nuevoCargoConcepto.trim() || !nuevoCargoPrecio} className="w-full bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white p-2.5 rounded-lg text-xs font-bold flex justify-center items-center gap-1">
                       + Añadir concepto
                     </button>
                   </form>
@@ -682,15 +687,15 @@ export function VistaPedidos() {
               )}
             </div>
 
-            <div className="flex justify-between text-gray-900 font-bold pt-2 border-t border-rose-200 items-center">
-              <span>PRECIO TOTAL DE PEDIDO:</span>
-              <span className="text-lg">{isEditing ? ((parseFloat(editForm.precioTraje) || 0) + editForm.cargosExtra.reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0)).toFixed(2) : Number(pedidoSeleccionado.precio_total).toFixed(2)} €</span>
+            <div className="flex justify-between text-gray-900 font-bold pt-2 border-t border-rose-200 items-center gap-2">
+              <span className="text-xs sm:text-sm uppercase">Precio Total Pedido:</span>
+              <span className="text-base sm:text-lg whitespace-nowrap font-black">{isEditing ? ((parseFloat(editForm.precioTraje) || 0) + editForm.cargosExtra.reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0)).toFixed(2) : Number(pedidoSeleccionado.precio_total).toFixed(2)} €</span>
             </div>
             <div className="border-t border-rose-200 pt-3">
               <p className="text-xs font-bold text-rose-600 uppercase mb-2">Entregas a cuenta:</p>
-              {pagos.length === 0 ? <p className="text-sm text-gray-500 italic">Sin pagos registrados.</p> : pagos.map((p, i) => <div key={p.id} className="flex justify-between items-center text-sm bg-white p-2 rounded-lg border border-rose-100 mb-2"><span className="text-gray-500">#{i + 1} - {p.fecha}</span>{isEditing ? <input type="number" step="0.01" className="p-1 border border-rose-200 rounded outline-none text-right font-bold focus:border-rose-500 w-24" value={editPagos[p.id] || ''} onChange={e => setEditPagos({...editPagos, [p.id]: e.target.value})} /> : <span className="font-bold text-green-600">+{Number(p.monto_entrega_cuenta).toFixed(2)} €</span>}</div>)}
+              {pagos.length === 0 ? <p className="text-sm text-gray-500 italic">Sin pagos registrados.</p> : pagos.map((p, i) => <div key={p.id} className="flex justify-between items-center text-xs sm:text-sm bg-white p-2 rounded-lg border border-rose-100 mb-2 gap-2"><span className="text-gray-500 truncate">#{i + 1} - {p.fecha}</span>{isEditing ? <input type="number" step="0.01" className="p-1 border border-rose-200 rounded outline-none text-right font-bold focus:border-rose-500 w-20 sm:w-24" value={editPagos[p.id] || ''} onChange={e => setEditPagos({...editPagos, [p.id]: e.target.value})} /> : <span className="font-bold text-green-600 whitespace-nowrap">+{Number(p.monto_entrega_cuenta).toFixed(2)} €</span>}</div>)}
             </div>
-            <div className="flex justify-between items-center pt-3 border-t-2 border-rose-200 mt-4"><span className="font-black text-rose-900 uppercase">Restante:</span><span className="text-3xl font-black text-rose-600">{restante.toFixed(2)} €</span></div>
+            <div className="flex justify-between items-center pt-3 border-t-2 border-rose-200 mt-4 gap-2"><span className="font-black text-rose-900 uppercase text-xs sm:text-sm">Restante:</span><span className="text-2xl sm:text-3xl font-black text-rose-600 whitespace-nowrap">{restante.toFixed(2)} €</span></div>
             {restante > 0 && (
               <form onSubmit={guardarNuevoPago} className="flex flex-col gap-3 mt-4 pt-4 border-t border-rose-200"><input type="number" step="0.01" inputMode="decimal" placeholder="Abono (€)" className="w-full p-3 border-2 border-rose-200 rounded-xl outline-none font-bold focus:border-rose-400 text-center" value={nuevoPago} onChange={e => setNuevoPago(e.target.value)} /><button type="submit" disabled={loadingPago} className="w-full bg-rose-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-rose-700 flex items-center justify-center"><Plus size={20} className="mr-1"/> Añadir</button></form>
             )}
