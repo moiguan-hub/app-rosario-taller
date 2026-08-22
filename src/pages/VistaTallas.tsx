@@ -144,10 +144,10 @@ export function VistaTallas() {
                 {TALLAS_DATA[fab][tipo].map((row) => (
                   <tr key={row.t} className="hover:bg-rose-50 transition-colors">
                     <td className="py-2 px-1 sm:px-3 text-left font-black text-rose-600 text-base sm:text-lg">{row.t}</td>
-                    <td className="py-2 px-1 sm:px-3 font-semibold">{row.p}</td>
-                    <td className="py-2 px-1 sm:px-3 font-semibold">{row.c}</td>
-                    <td className="py-2 px-1 sm:px-3 font-semibold">{row.ca}</td>
-                    {row.l !== undefined && <td className="py-2 px-1 sm:px-3 font-semibold">{row.l}</td>}
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.p}</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.c}</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.ca}</td>
+                    {row.l !== undefined && <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.l}</td>}
                   </tr>
                 ))}
               </tbody>
