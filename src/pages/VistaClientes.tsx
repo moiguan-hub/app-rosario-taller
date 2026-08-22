@@ -34,10 +34,12 @@ export function VistaClientes() {
     else fetchClientes();
   };
 
+  const capitalize = (str?: string) => str ? str.replace(/(^\w|\s\w)/g, m => m.toUpperCase()) : '';
+
   const guardar = async (id: string) => {
     const { error } = await supabase.from('clientes').update({
-      nombre: editForm.nombre?.replace(/(^\w|\s\w)/g, m => m.toUpperCase()),
-      apellidos: editForm.apellidos?.replace(/(^\w|\s\w)/g, m => m.toUpperCase()),
+      nombre: capitalize(editForm.nombre),
+      apellidos: capitalize(editForm.apellidos),
       telefono: editForm.telefono,
       telefono2: editForm.telefono2 || null,
       contacto2: editForm.contacto2 || null,
@@ -113,7 +115,7 @@ export function VistaClientes() {
                   <div className="flex items-center cursor-pointer flex-1" onClick={() => toggleCliente(c)}>
                     <div className="bg-rose-50 p-3 rounded-full mr-4 text-rose-500 shrink-0"><User size={24} /></div>
                     <div>
-                      <p className="font-bold text-gray-800 hover:text-rose-600 transition-colors">{c.apellidos?.replace(/(^\w|\s\w)/g, m => m.toUpperCase())}, {c.nombre?.replace(/(^\w|\s\w)/g, m => m.toUpperCase())}</p>
+                      <p className="font-bold text-gray-800 hover:text-rose-600 transition-colors">{capitalize(c.apellidos)}, {capitalize(c.nombre)}</p>
                       <p className="text-sm text-gray-500">
                         Tel: {c.telefono || '-'}
                         {c.telefono2 ? ` | Tel 2: ${c.telefono2}${c.contacto2 ? ` (${c.contacto2})` : ''}` : ''}

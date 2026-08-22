@@ -77,7 +77,7 @@ export function VistaPedidos() {
 
   useEffect(() => {
     const fetchTodos = async () => {
-      const { data } = await supabase.from('pedidos').select('*, clientes(id, nombre, apellidos, telefono, telefono2, contacto2)');
+      const { data } = await supabase.from('pedidos').select('*, clientes(*)');
       if (data) {
         const sortedData = data.sort((a, b) => {
           const apA = (a.clientes?.apellidos || '').toLowerCase();
@@ -367,6 +367,19 @@ export function VistaPedidos() {
     }
     return '';
   };
+
+  const capitalize = (str?: string) => str ? str.replace(/(^\w|\s\w)/g, m => m.toUpperCase()) : '';
+
+  const pedidosFiltrados = todosLosPedidos.filter(p => {
+    if (!busqueda.trim()) return true;
+    const term = busqueda.toLowerCase().trim();
+    const clienteInfo = `${p.clientes?.nombre || ''} ${p.clientes?.apellidos || ''} ${p.clientes?.telefono || ''} ${p.clientes?.telefono2 || ''} ${p.clientes?.contacto2 || ''}`.toLowerCase();
+    const desc = getDesc(p).toLowerCase();
+    const fab = (p.fabricante || '').toLowerCase();
+    const cat = (p.categoria || '').toLowerCase();
+    const talon = (p.numero_talon || '').toLowerCase();
+    return clienteInfo.includes(term) || desc.includes(term) || fab.includes(term) || cat.includes(term) || talon.includes(term);
+  });
   const getSugerenciaTallaVista = (medida: string, valor: any, p: Pedido | null) => {
     const v = parseFloat(valor) || 0;
     if (!v || !p) return null;
@@ -515,34 +528,45 @@ export function VistaPedidos() {
       {paso === 1 && (
         <div className="space-y-6 animate-fadeIn">
           <div className="relative"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400"><Search size={24} /></div><input type="text" placeholder="Buscar..." className="w-full pl-12 p-4 border-2 border-gray-100 rounded-xl outline-none text-lg focus:border-rose-300" value={busqueda} onChange={e => setBusqueda(e.target.value)} /></div>
-          <div className="space-y-2">{clientes.length > 0 ? clientes.map(c => (<div key={c.id} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-center" onClick={() => seleccionarCliente(c)}><div className="bg-rose-50 p-3 rounded-full mr-4 text-rose-500"><User size={24} /></div><div><p className="font-bold text-gray-800 text-lg">{c.apellidos}, {c.nombre}</p><p className="text-gray-500 text-sm">{c.telefono || ''}{c.telefono2 ? ` | Tel 2: ${c.telefono2}${c.contacto2 ? ` (${c.contacto2})` : ''}` : ''}</p></div></div>)) : busqueda.trim().length >= 2 && <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm font-medium text-center">⚠️ No se encontró ningún cliente con "{busqueda}".</div>}</div>
+          {clientes.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="font-bold text-gray-700 uppercase tracking-wide text-sm mb-2">Clientes ({clientes.length})</h3>
+              {clientes.map(c => (<div key={c.id} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-center bg-white" onClick={() => seleccionarCliente(c)}><div className="bg-rose-50 p-3 rounded-full mr-4 text-rose-500"><User size={24} /></div><div><p className="font-bold text-gray-800 text-lg">{c.apellidos}, {c.nombre}</p><p className="text-gray-500 text-sm">{c.telefono || ''}{c.telefono2 ? ` | Tel 2: ${c.telefono2}${c.contacto2 ? ` (${c.contacto2})` : ''}` : ''}</p></div></div>))}
+            </div>
+          )}
           
-          {!busqueda && todosLosPedidos.length > 0 && (
+          {todosLosPedidos.length > 0 && (
             <div className="mt-8 border-t border-gray-100 pt-6">
-              <h3 className="font-bold text-gray-700 uppercase tracking-wide text-sm mb-4">Todos los Pedidos ({todosLosPedidos.length})</h3>
-              <div className="space-y-3">
-                {todosLosPedidos.map(p => (
-                  <div key={p.id} onClick={() => seleccionarPedidoDirecto(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-start bg-white shadow-sm">
-                    <FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} />
-                    <div className="flex-1 w-full min-w-0">
-                      <p className="font-bold text-gray-800 text-lg break-words">{(p as any).clientes?.apellidos?.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase())}, {(p as any).clientes?.nombre?.replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase())}</p>
-                      <p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p>
-                      <p className="text-base text-gray-500 mt-1 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {p.estado_proceso === 'ENTREGADO' ? (
-                          <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">
-                            ENTREGADO
-                          </span>
-                        ) : (
-                          <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}
-                          </span>
-                        )}
+              <h3 className="font-bold text-gray-700 uppercase tracking-wide text-sm mb-4">
+                {busqueda.trim() ? `Pedidos encontrados (${pedidosFiltrados.length})` : `Todos los Pedidos (${todosLosPedidos.length})`}
+              </h3>
+              {pedidosFiltrados.length === 0 ? (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm font-medium text-center">⚠️ No se encontró ningún pedido con "{busqueda}".</div>
+              ) : (
+                <div className="space-y-3">
+                  {pedidosFiltrados.map(p => (
+                    <div key={p.id} onClick={() => seleccionarPedidoDirecto(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-start bg-white shadow-sm">
+                      <FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} />
+                      <div className="flex-1 w-full min-w-0">
+                        <p className="font-bold text-gray-800 text-lg break-words">{capitalize(p.clientes?.apellidos)}, {capitalize(p.clientes?.nombre)}</p>
+                        <p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p>
+                        <p className="text-base text-gray-500 mt-1 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {p.estado_proceso === 'ENTREGADO' ? (
+                            <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">
+                              ENTREGADO
+                            </span>
+                          ) : (
+                            <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
