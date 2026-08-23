@@ -264,6 +264,15 @@ export function VistaPedidos() {
     }
   };
 
+  const guardarTipoRapido = async (val: string) => {
+    if (!pedidoSeleccionado) return;
+    const nuevasMedidas = { ...(pedidoSeleccionado.medidas || {}), tipo_articulo: val };
+    const pNew = { ...pedidoSeleccionado, tipo_articulo: val, medidas: nuevasMedidas };
+    setPedidoSeleccionado(pNew);
+    setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
+    await supabase.from('pedidos').update({ medidas: nuevasMedidas, tipo_articulo: val }).eq('id', pedidoSeleccionado.id);
+  };
+
   const guardarNuevoPago = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pedidoSeleccionado || !nuevoPago || parseFloat(nuevoPago) <= 0) return;
@@ -355,15 +364,19 @@ export function VistaPedidos() {
 
   const getDesc = (p: Pedido | null) => {
     if (!p) return '';
+    const tipo = p.medidas?.tipo_articulo || (p as any).tipo_articulo;
     let raw = p.descripcion || (p.detalles_tejido && p.detalles_tejido.split(' | ')[0]) || 'Sin descripción';
-    let formatted = raw.replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*\[(SENORA|NINA)\]\s*/i, '[$1] ')
-                       .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*/i, '[$1] ')
+    let formatted = raw.replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*\[(SENORA|NINA)\]\s*/i, '')
+                       .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*/i, '')
+                       .replace(/^\[(SENORA|NINA)\]\s*/i, '')
                        .replace(/^Modelo:\s*/i, '');
+    const prefix = tipo ? `[${tipo}] ` : '';
     const tallaVal = p.medidas?.talla === 'TEspecial' ? 'TEsp' : p.medidas?.talla;
-    if (tallaVal && tallaVal !== '-' && !formatted.toLowerCase().includes('talla')) {
-      return `${formatted} (Talla: ${tallaVal})`;
+    let res = `${prefix}${formatted}`;
+    if (tallaVal && tallaVal !== '-' && !res.toLowerCase().includes('talla')) {
+      return `${res} (Talla: ${tallaVal})`;
     }
-    return formatted;
+    return res;
   };
 
   const getObs = (p: Pedido | null) => {
@@ -602,14 +615,18 @@ export function VistaPedidos() {
                       <span className="text-rose-900 mr-1.5 font-extrabold">📅 Fecha:</span>
                       <input type="date" className="bg-white p-1.5 border rounded-lg font-bold text-gray-800 outline-none" value={editForm.fecha_pedido || ''} onChange={e => setEditForm({...editForm, fecha_pedido: e.target.value})} />
                     </div>
-                    <div className="flex items-center bg-amber-50 p-2 rounded-xl border border-amber-200">
-                      <span className="text-amber-900 mr-1.5 font-extrabold">🏭 Fabricante:</span>
+                    <div className="flex items-center bg-amber-50 p-2 rounded-xl border border-amber-200 gap-1.5">
+                      <span className="text-amber-900 font-extrabold">🏭 Fabricante:</span>
                       <select className="bg-white p-1.5 border rounded-lg font-bold text-gray-800 outline-none" value={editForm.fabricante} onChange={e => setEditForm({...editForm, fabricante: e.target.value})}>
                         <option value="">Sin especificar</option>
                         <option value="Ana Barroso">Ana Barroso</option>
                         <option value="Aires de Ferias">Aires de Ferias</option>
                         <option value="Carmen Moda">Carmen Moda</option>
                         <option value="OTRO">Otro...</option>
+                      </select>
+                      <select className="bg-white p-1.5 border border-amber-300 rounded-lg font-black text-amber-950 outline-none" value={editForm.tipo_articulo || 'SENORA'} onChange={e => setEditForm({...editForm, tipo_articulo: e.target.value})}>
+                        <option value="SENORA">Señora</option>
+                        <option value="NINA">Niña</option>
                       </select>
                     </div>
                     <div className="flex items-center bg-blue-50 p-2 rounded-xl border border-blue-200">
@@ -632,8 +649,17 @@ export function VistaPedidos() {
                     <span className="inline-flex items-center text-sm md:text-base font-bold px-3.5 py-1.5 bg-rose-100 text-rose-900 rounded-xl shadow-sm border border-rose-200">
                       📅 Pedido el: <strong className="ml-1.5 text-base md:text-lg font-black text-rose-950">{pedidoSeleccionado.fecha_pedido || 'Sin fecha'}</strong>
                     </span>
-                    <span className="inline-flex items-center text-sm md:text-base font-bold px-3.5 py-1.5 bg-amber-100 text-amber-900 rounded-xl shadow-sm border border-amber-200">
-                      🏭 Fabricante: <strong className="ml-1.5 text-base md:text-lg font-black text-amber-950">{pedidoSeleccionado.fabricante || 'Sin especificar'}</strong>
+                    <span className="inline-flex items-center gap-2 text-sm md:text-base font-bold px-3.5 py-1.5 bg-amber-100 text-amber-900 rounded-xl shadow-sm border border-amber-200 whitespace-nowrap">
+                      <span>🏭 Fabricante: <strong className="text-base md:text-lg font-black text-amber-950">{pedidoSeleccionado.fabricante || 'Sin especificar'}</strong></span>
+                      <span className="text-amber-300 font-normal">|</span>
+                      <select
+                        className="bg-white text-xs md:text-sm font-extrabold text-amber-950 px-2 py-1 rounded-lg border border-amber-300 outline-none cursor-pointer shadow-inner shrink-0"
+                        value={pedidoSeleccionado.medidas?.tipo_articulo || (pedidoSeleccionado as any).tipo_articulo || 'SENORA'}
+                        onChange={e => guardarTipoRapido(e.target.value)}
+                      >
+                        <option value="SENORA">Señora</option>
+                        <option value="NINA">Niña</option>
+                      </select>
                     </span>
                     <span className="inline-flex items-center text-sm md:text-base font-bold px-3 py-1 bg-blue-50 text-blue-900 rounded-xl shadow-sm border-2 border-blue-200">
                       <Ticket size={18} className="mr-1.5 text-blue-700 shrink-0" />
@@ -655,9 +681,9 @@ export function VistaPedidos() {
                 {pedidoSeleccionado.estado_ubicacion === 'STOCK' ? <><CheckCircle size={18} className="mr-1.5 flex-shrink-0" /> EN TIENDA</> : <><Factory size={18} className="mr-1.5 flex-shrink-0" /> FÁBRICA</>}
               </button>
 
-              <button onClick={toggleEstadoProceso} className={`flex-1 md:flex-initial flex items-center justify-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-colors ${pedidoSeleccionado.estado_proceso === 'ENTREGADO' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+              <button onClick={toggleEstadoProceso} className={`flex-1 md:flex-initial flex items-center justify-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-colors ${pedidoSeleccionado.estado_proceso === 'ENTREGADO' ? 'bg-purple-100 text-purple-900 border-2 border-purple-300 hover:bg-purple-200' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
                 <PackageCheck size={18} className="mr-1.5 flex-shrink-0" />
-                {pedidoSeleccionado.estado_proceso === 'ENTREGADO' ? 'ENTREGADO' : 'MARCAR ENTREGADO'}
+                {pedidoSeleccionado.estado_proceso === 'ENTREGADO' ? 'ENTREGADO' : 'ENTREGAR'}
               </button>
             </div>
           </div>
