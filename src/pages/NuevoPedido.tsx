@@ -56,11 +56,17 @@ export function NuevoPedido() {
         return;
       }
       setBuscando(true);
-      const { data } = await supabase.from('clientes')
+      const { data, error } = await supabase.from('clientes')
         .select('*')
         .or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%,telefono2.ilike.%${busqueda}%,contacto2.ilike.%${busqueda}%`)
         .limit(5);
-      if (data) setClientes(data);
+      if (error) {
+        const { data: data2 } = await supabase.from('clientes')
+          .select('*')
+          .or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%`)
+          .limit(5);
+        if (data2) setClientes(data2);
+      } else if (data) setClientes(data);
       setBuscando(false);
       setBusquedaRealizada(true);
     };
@@ -83,7 +89,15 @@ export function NuevoPedido() {
     } else if (nuevoCliente.nombre && nuevoCliente.apellidos) {
       setLoading(true);
       try {
-        const { data: newC, error: errC } = await supabase.from('clientes').insert([nuevoCliente]).select().single();
+        let payload: any = { ...nuevoCliente };
+        let { data: newC, error: errC } = await supabase.from('clientes').insert([payload]).select().single();
+        if (errC && (errC.message.includes('contacto2') || errC.message.includes('telefono2') || errC.message.includes('schema cache'))) {
+          delete payload.contacto2;
+          delete payload.telefono2;
+          const res = await supabase.from('clientes').insert([payload]).select().single();
+          newC = res.data;
+          errC = res.error;
+        }
         if (errC) throw errC;
         setClienteSeleccionado(newC);
         setPaso(2);
@@ -105,7 +119,15 @@ export function NuevoPedido() {
       let clientId = clienteSeleccionado?.id;
 
       if (!clientId) {
-        const { data: newC, error: errC } = await supabase.from('clientes').insert([nuevoCliente]).select().single();
+        let payload: any = { ...nuevoCliente };
+        let { data: newC, error: errC } = await supabase.from('clientes').insert([payload]).select().single();
+        if (errC && (errC.message.includes('contacto2') || errC.message.includes('telefono2') || errC.message.includes('schema cache'))) {
+          delete payload.contacto2;
+          delete payload.telefono2;
+          const res = await supabase.from('clientes').insert([payload]).select().single();
+          newC = res.data;
+          errC = res.error;
+        }
         if (errC) throw errC;
         clientId = newC.id;
       }

@@ -23,8 +23,13 @@ export function VistaClientes() {
     if (busqueda.length > 1) {
       q = q.or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%,telefono2.ilike.%${busqueda}%,contacto2.ilike.%${busqueda}%`);
     }
-    const { data } = await q;
-    if (data) setClientes(data);
+    const { data, error } = await q;
+    if (error && busqueda.length > 1) {
+      const { data: data2 } = await supabase.from('clientes').select('*').or(`apellidos.ilike.%${busqueda}%,nombre.ilike.%${busqueda}%,telefono.ilike.%${busqueda}%`).order('apellidos', { ascending: true });
+      if (data2) setClientes(data2);
+    } else if (data) {
+      setClientes(data);
+    }
   };
 
   const eliminar = async (id: string) => {
@@ -37,14 +42,21 @@ export function VistaClientes() {
   const capitalize = (str?: string) => str ? str.replace(/(^\w|\s\w)/g, m => m.toUpperCase()) : '';
 
   const guardar = async (id: string) => {
-    const { error } = await supabase.from('clientes').update({
+    const payload: any = {
       nombre: capitalize(editForm.nombre),
       apellidos: capitalize(editForm.apellidos),
       telefono: editForm.telefono,
       telefono2: editForm.telefono2 || null,
       contacto2: editForm.contacto2 || null,
       direccion: editForm.direccion
-    }).eq('id', id);
+    };
+    let { error } = await supabase.from('clientes').update(payload).eq('id', id);
+    if (error && (error.message.includes('contacto2') || error.message.includes('telefono2') || error.message.includes('schema cache'))) {
+      delete payload.contacto2;
+      delete payload.telefono2;
+      const res = await supabase.from('clientes').update(payload).eq('id', id);
+      error = res.error;
+    }
     
     if (error) alert("Error al guardar: " + error.message);
     else {

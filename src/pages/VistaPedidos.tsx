@@ -218,14 +218,21 @@ export function VistaPedidos() {
     const upPrecio = parseFloat(editForm.precio_total) || 0;
     const combinedDetalles = (editForm.tipo_articulo === 'SENORA' || editForm.tipo_articulo === 'NINA' ? '[' + editForm.tipo_articulo + '] ' : '') + (editForm.descripcion ? 'Modelo: ' + editForm.descripcion : '') + (tejidosStr ? ' | ' + tejidosStr : '') + (editForm.detalles_tejido ? ' | ' + editForm.detalles_tejido : '');
 
-    const { error } = await supabase.from('pedidos').update({
+    const payload: any = {
       fabricante: editForm.fabricante,
       fecha_pedido: editForm.fecha_pedido || null,
       numero_talon: editForm.numero_talon || null,
       medidas: upMed,
       detalles_tejido: combinedDetalles,
       precio_total: upPrecio
-    }).eq('id', pedidoSeleccionado.id);
+    };
+
+    let { error } = await supabase.from('pedidos').update(payload).eq('id', pedidoSeleccionado.id);
+    if (error && (error.message.includes('numero_talon') || error.message.includes('schema cache'))) {
+      delete payload.numero_talon;
+      const res = await supabase.from('pedidos').update(payload).eq('id', pedidoSeleccionado.id);
+      error = res.error;
+    }
     
     // Update pagos
     for (const p of pagos) {
@@ -251,7 +258,10 @@ export function VistaPedidos() {
     const pNew = { ...pedidoSeleccionado, numero_talon: val };
     setPedidoSeleccionado(pNew);
     setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
-    await supabase.from('pedidos').update({ numero_talon: val || null }).eq('id', pedidoSeleccionado.id);
+    const { error } = await supabase.from('pedidos').update({ numero_talon: val || null }).eq('id', pedidoSeleccionado.id);
+    if (error && (error.message.includes('numero_talon') || error.message.includes('schema cache'))) {
+      console.warn('numero_talon no existe aún en la base de datos:', error.message);
+    }
   };
 
   const guardarNuevoPago = async (e: React.FormEvent) => {
