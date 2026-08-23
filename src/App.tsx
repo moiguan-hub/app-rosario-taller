@@ -15,10 +15,10 @@ function App() {
             <h1 className="text-2xl font-black text-rose-600">APP Rosario</h1>
             <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2">
               <a href="/" className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Inicio</a>
-              <a href="/consultas" className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Consultas</a>
               <a href="/pedidos" onClick={() => { localStorage.removeItem('paso'); localStorage.removeItem('clienteId'); localStorage.removeItem('pedidoId'); }} className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Pedidos</a>
               <a href="/clientes" className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Clientes</a>
               <a href="/tallas" className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Tallas</a>
+              <a href="/consultas" className="text-sm md:text-base font-bold text-gray-600 hover:text-rose-600">Consultas</a>
             </nav>
           </div>
         </header>
