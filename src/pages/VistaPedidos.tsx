@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone, MessageCircle, PackageCheck, Ticket } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone, MessageCircle, PackageCheck, Ticket, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Cliente, Pedido, Pago } from '../types/database.types';
 
@@ -29,6 +29,22 @@ export function VistaPedidos() {
   const [loadingCargo, setLoadingCargo] = useState(false);
   const [editPagos, setEditPagos] = useState<{[key: string]: string}>({});
   const [modalContacto, setModalContacto] = useState<{ tipo: 'call' | 'wa', tel1: string, nom1: string, tel2: string, nom2: string } | null>(null);
+  const [pedidoPrincipal, setPedidoPrincipal] = useState<Pedido | null>(null);
+
+  useEffect(() => {
+    if (pedidoSeleccionado?.pedido_principal_id) {
+      const found = pedidos.find(p => p.id === pedidoSeleccionado.pedido_principal_id);
+      if (found) {
+        setPedidoPrincipal(found);
+      } else {
+        supabase.from('pedidos').select('*').eq('id', pedidoSeleccionado.pedido_principal_id).single().then(({ data }) => {
+          if (data) setPedidoPrincipal(data as Pedido);
+        });
+      }
+    } else {
+      setPedidoPrincipal(null);
+    }
+  }, [pedidoSeleccionado, pedidos]);
 
   useEffect(() => {
     const loadPersisted = async () => {
@@ -266,11 +282,59 @@ export function VistaPedidos() {
 
   const guardarTipoRapido = async (val: string) => {
     if (!pedidoSeleccionado) return;
-    const nuevasMedidas = { ...(pedidoSeleccionado.medidas || {}), tipo_articulo: val };
-    const pNew = { ...pedidoSeleccionado, tipo_articulo: val, medidas: nuevasMedidas };
+    const tipoArt = (val || null) as 'NINA' | 'SENORA' | null;
+    const nuevasMedidas = { ...(pedidoSeleccionado.medidas || {}), tipo_articulo: tipoArt };
+    const pNew: Pedido = { ...pedidoSeleccionado, tipo_articulo: tipoArt, medidas: nuevasMedidas };
     setPedidoSeleccionado(pNew);
     setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
-    await supabase.from('pedidos').update({ medidas: nuevasMedidas, tipo_articulo: val }).eq('id', pedidoSeleccionado.id);
+    await supabase.from('pedidos').update({ medidas: nuevasMedidas, tipo_articulo: tipoArt }).eq('id', pedidoSeleccionado.id);
+  };
+
+  const cambiarVinculacionPedido = async (nuevoIdSeleccionado: string) => {
+    if (!pedidoSeleccionado) return;
+    const nuevoId = nuevoIdSeleccionado || null;
+    const pNew: Pedido = { ...pedidoSeleccionado, pedido_principal_id: nuevoId };
+    setPedidoSeleccionado(pNew);
+    setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
+
+    await supabase
+      .from('pedidos')
+      .update({ pedido_principal_id: nuevoId })
+      .eq('id', pedidoSeleccionado.id);
+  };
+
+  const eliminarPedido = async () => {
+    if (!pedidoSeleccionado) return;
+
+    const confirmado = window.confirm(
+      "⚠️ ¿ATENCIÓN: Estás seguro de que deseas eliminar permanentemente este pedido? Esta acción no se puede deshacer."
+    );
+
+    if (!confirmado) return;
+
+    const pedidoIdBorrar = pedidoSeleccionado.id;
+
+    const { error } = await supabase
+      .from('pedidos')
+      .delete()
+      .eq('id', pedidoIdBorrar);
+
+    if (error) {
+      alert("Error al eliminar el pedido: " + error.message);
+      return;
+    }
+
+    alert("El pedido ha sido borrado correctamente.");
+
+    const nuevosPedidos = pedidos.filter(p => p.id !== pedidoIdBorrar);
+    setPedidos(nuevosPedidos);
+    setPedidoSeleccionado(null);
+
+    if (nuevosPedidos.length > 0) {
+      setPaso(2);
+    } else {
+      setPaso(1);
+    }
   };
 
   const guardarNuevoPago = async (e: React.FormEvent) => {
@@ -599,7 +663,7 @@ export function VistaPedidos() {
         <div className="space-y-6 animate-fadeIn">
           <div className="bg-gray-900 p-4 rounded-xl shadow-md text-white"><p className="text-xs text-gray-400 font-semibold uppercase mb-1">Cliente</p><p className="font-bold text-xl">{clienteSeleccionado.nombre} {clienteSeleccionado.apellidos}</p></div>
           <h3 className="font-bold text-gray-700 uppercase text-sm border-b pb-2">Historial ({pedidos.length})</h3>
-          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-start bg-white shadow-sm"><FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} /><div className="flex-1 w-full min-w-0"><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p><p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p><div className="flex flex-wrap gap-2 mt-2">{p.estado_proceso === 'ENTREGADO' ? <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">ENTREGADO</span> : <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span>}</div></div></div>))}</div>
+          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-start bg-white shadow-sm"><FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} /><div className="flex-1 w-full min-w-0"><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p><p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p><div className="flex flex-wrap gap-2 mt-2">{p.estado_proceso === 'ENTREGADO' ? <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">ENTREGADO</span> : <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span>}{p.pedido_principal_id && <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-amber-100 text-amber-800 border border-amber-200">Cobro Vinculado</span>}</div></div></div>))}</div>
         </div>
       )}
 
@@ -672,6 +736,47 @@ export function VistaPedidos() {
                         onChange={e => guardarTalonRapido(e.target.value)}
                       />
                     </span>
+                    <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold px-3 py-1.5 bg-purple-50 text-purple-900 rounded-xl shadow-sm border border-purple-200">
+                      <span className="text-purple-950 font-black whitespace-nowrap">Vincular pago a:</span>
+                      <select
+                        className="bg-white text-xs sm:text-sm font-bold text-purple-950 px-2 py-1 rounded-lg border border-purple-300 outline-none cursor-pointer shadow-inner"
+                        value={pedidoSeleccionado.pedido_principal_id || ''}
+                        onChange={e => cambiarVinculacionPedido(e.target.value)}
+                      >
+                        <option value="">Ninguno (Este pedido es el Principal)</option>
+                        {pedidos
+                          .filter(p => p.id !== pedidoSeleccionado.id)
+                          .map(p => (
+                            <option key={p.id} value={p.id}>
+                              {getDesc(p) || 'Pedido'} ({p.categoria}) - {p.fecha_pedido || 'Sin fecha'}
+                            </option>
+                          ))}
+                      </select>
+                    </span>
+                    {pedidoSeleccionado.pedido_principal_id && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          let mainOrder = pedidos.find(p => p.id === pedidoSeleccionado.pedido_principal_id);
+                          if (!mainOrder) {
+                            const { data } = await supabase.from('pedidos').select('*').eq('id', pedidoSeleccionado.pedido_principal_id).single();
+                            if (data) mainOrder = data as Pedido;
+                          }
+                          if (mainOrder) {
+                            setPedidoSeleccionado(mainOrder);
+                            const { data: payData } = await supabase.from('pagos').select('*').eq('pedido_id', mainOrder.id).order('fecha', { ascending: true });
+                            setPagos(payData || []);
+                            setIsEditing(false);
+                          }
+                        }}
+                        className="inline-flex items-center text-xs sm:text-sm font-bold px-3.5 py-1.5 bg-amber-100 text-amber-900 hover:bg-amber-200 transition-colors rounded-xl shadow-sm border border-amber-300 cursor-pointer gap-1"
+                        title="Ir al pedido principal"
+                      >
+                        <Ticket size={16} className="text-amber-700 shrink-0" />
+                        <span>Cobro vinculado a: <strong className="underline font-black">{pedidoPrincipal ? (getDesc(pedidoPrincipal) || `Pedido #${pedidoPrincipal.id.slice(0,6)}`) : 'Pedido principal'}</strong></span>
+                        <ArrowRight size={16} className="text-amber-700 shrink-0" />
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -684,6 +789,11 @@ export function VistaPedidos() {
               <button onClick={toggleEstadoProceso} className={`flex-1 md:flex-initial flex items-center justify-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-colors ${pedidoSeleccionado.estado_proceso === 'ENTREGADO' ? 'bg-purple-100 text-purple-900 border-2 border-purple-300 hover:bg-purple-200' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
                 <PackageCheck size={18} className="mr-1.5 flex-shrink-0" />
                 {pedidoSeleccionado.estado_proceso === 'ENTREGADO' ? 'ENTREGADO' : 'ENTREGAR'}
+              </button>
+
+              <button onClick={eliminarPedido} className="flex-1 md:flex-initial flex items-center justify-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 shadow-sm transition-colors cursor-pointer">
+                <Trash2 size={18} className="mr-1.5 flex-shrink-0" />
+                Eliminar Pedido
               </button>
             </div>
           </div>
@@ -827,7 +937,39 @@ export function VistaPedidos() {
           <div className="bg-rose-50/50 border-2 border-rose-100 rounded-2xl p-4 sm:p-6 space-y-3">
             <h4 className="font-bold text-rose-800 uppercase text-sm border-b border-rose-200 pb-2">Control Económico</h4>
             
-            <div className="flex justify-between text-gray-700 items-center text-sm font-semibold gap-2">
+            {pedidoSeleccionado.pedido_principal_id ? (
+              <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 text-center space-y-3">
+                <div className="inline-flex items-center justify-center p-2.5 bg-amber-100 rounded-full text-amber-800">
+                  <Ticket size={24} />
+                </div>
+                <h5 className="font-black text-amber-950 uppercase text-sm">Módulo de Cobro Desactivado</h5>
+                <p className="text-xs text-amber-900 font-medium leading-relaxed">
+                  Este pedido está vinculado a un pedido anterior. El cobro y saldo de este encargo se gestionan de forma unificada en el pedido principal.
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    let mainOrder = pedidos.find(p => p.id === pedidoSeleccionado.pedido_principal_id);
+                    if (!mainOrder) {
+                      const { data } = await supabase.from('pedidos').select('*').eq('id', pedidoSeleccionado.pedido_principal_id).single();
+                      if (data) mainOrder = data as Pedido;
+                    }
+                    if (mainOrder) {
+                      setPedidoSeleccionado(mainOrder);
+                      const { data: payData } = await supabase.from('pagos').select('*').eq('pedido_id', mainOrder.id).order('fecha', { ascending: true });
+                      setPagos(payData || []);
+                      setIsEditing(false);
+                    }
+                  }}
+                  className="inline-flex items-center justify-center px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm cursor-pointer gap-1.5"
+                >
+                  <span>Ir al Pedido Principal</span>
+                  <ArrowRight size={16} />
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between text-gray-700 items-center text-sm font-semibold gap-2">
               <span>Precio Traje:</span>
               {isEditing ? (
                 <input type="number" step="0.01" className="p-1 border-b-2 border-rose-300 bg-white rounded text-right font-bold text-gray-800 outline-none focus:border-rose-500 w-24" value={editForm.precioTraje} onChange={e => setEditForm({...editForm, precioTraje: e.target.value})} />
@@ -886,6 +1028,8 @@ export function VistaPedidos() {
             <div className="flex justify-between items-center pt-3 border-t-2 border-rose-200 mt-4 gap-2"><span className="font-black text-rose-900 uppercase text-xs sm:text-sm">Restante:</span><span className="text-2xl sm:text-3xl font-black text-rose-600 whitespace-nowrap">{restante.toFixed(2)} €</span></div>
             {restante > 0 && (
               <form onSubmit={guardarNuevoPago} className="flex flex-col gap-3 mt-4 pt-4 border-t border-rose-200"><input type="number" step="0.01" inputMode="decimal" placeholder="Abono (€)" className="w-full p-3 border-2 border-rose-200 rounded-xl outline-none font-bold focus:border-rose-400 text-center" value={nuevoPago} onChange={e => setNuevoPago(e.target.value)} /><button type="submit" disabled={loadingPago} className="w-full bg-rose-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-rose-700 flex items-center justify-center"><Plus size={20} className="mr-1"/> Añadir</button></form>
+            )}
+              </>
             )}
           </div>
         </div>

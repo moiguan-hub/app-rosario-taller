@@ -1,0 +1,175 @@
+================================================================================
+INFORME TÉCNICO Y DE ARQUITECTURA - APP ROSARIO
+================================================================================
+Fecha de actualización: Agosto 2026
+Propósito: Documentación completa del estado, funcionamiento, lógica de negocio
+y esquema técnico de la aplicación para continuidad del desarrollo.
+
+--------------------------------------------------------------------------------
+1. DESCRIPCIÓN GENERAL DEL PROYECTO
+--------------------------------------------------------------------------------
+"APP Rosario" es una aplicación web SPA (Single Page Application) concebida para la 
+gestión operativa y económica de una tienda/taller de confección y venta de trajes 
+(especializada en moda flamenca y comunión).
+
+Permite:
+- Gestión completa de clientes (alta, edición, búsqueda, historial).
+- Alta de pedidos con desglose de prendas, medidas personalizadas, tejidos y cargos extra.
+- Control de estados de pedido:
+  * Ubicación física: PEDIDO (En fábrica) / STOCK (En tienda).
+  * Proceso: PENDIENTE_LLEGADA, EN_PRUEBAS, EN_ARREGLOS, LISTO, ENTREGADO.
+- Control financiero: Registro de pagos a cuenta/parciales, cálculo de saldos pendientes.
+- Guía de tallas por fabricante (Ana Barroso, Aires de Feria) y sugerencia dinámica.
+- Módulo de Consultas e Informes con filtros globales e impresión optimizada CSS.
+
+--------------------------------------------------------------------------------
+2. STACK TECNOLÓGICO Y ENTORNO
+--------------------------------------------------------------------------------
+- Frontend: React 18 + TypeScript + Vite.
+- Estilos UI: Tailwind CSS + Lucide React (iconografía).
+- Enrutamiento: React Router DOM v7.
+- Backend / Base de Datos: Supabase (PostgreSQL 15+).
+- Cliente DB: `@supabase/supabase-js`.
+- Servidor / Contenedorización: Docker (Multi-stage Node.js builder + Nginx en puerto 8080).
+- Despliegue CI/CD: GCP Cloud Build (`cloudbuild.yaml`).
+
+Variables de Entorno requeridas:
+- `VITE_SUPABASE_URL`: URL del proyecto Supabase.
+- `VITE_SUPABASE_ANON_KEY`: Clave pública / anon key de Supabase.
+
+--------------------------------------------------------------------------------
+3. ESTRUCTURA DEL PROYECTO Y ARCHIVOS PRINCIPALES
+--------------------------------------------------------------------------------
+c:\Users\Moises\Desktop\APP Rosario\
+├── Dockerfile                  # Contenedor multi-etapa (build Vite + Nginx)
+├── nginx.conf                  # Configuración Nginx para rutas SPA (try_files)
+├── cloudbuild.yaml             # Pipeline Google Cloud Build
+├── migrate.js                  # Script Node.js auxiliar para DDL en PostgreSQL
+├── supabase_schema.sql         # Definición DDL de base de datos (Tablas, ENUMs, RLS)
+└── src/
+    ├── main.tsx                # Punto de entrada de React
+    ├── App.tsx                 # Enrutador principal y Header con navegación
+    ├── lib/supabase.ts         # Instancia singleton del cliente Supabase
+    ├── types/database.types.ts # Interfaces TypeScript (Cliente, Pedido, Pago, ENUMs)
+    └── pages/
+        ├── Home.tsx            # Menú principal con accesos a funcionalidades
+        ├── NuevoPedido.tsx     # Asistente de 2 pasos para alta de cliente/pedido
+        ├── VistaPedidos.tsx    # Gestión detallada de pedidos en 3 niveles
+        ├── VistaClientes.tsx   # CRUD de clientes y despliegue de su historial
+        ├── VistaConsultas.tsx  # Tablero de control, reportes e impresión
+        └── VistaTallas.tsx     # Consulta interactiva de tablas de medidas por marca
+
+--------------------------------------------------------------------------------
+4. MODELO DE DATOS Y ESQUEMA POSTGRESQL (Supabase)
+--------------------------------------------------------------------------------
+Tipos ENUM:
+- `categoria_pedido`: 'FLAMENCA', 'COMUNION', 'OTRO'
+- `estado_ubicacion_pedido`: 'PEDIDO' (Fábr.), 'STOCK' (Tienda)
+- `estado_proceso_pedido`: 'PENDIENTE_LLEGADA', 'EN_PRUEBAS', 'EN_ARREGLOS', 'LISTO', 'ENTREGADO'
+
+Tabla: clientes
+- `id` (UUID, PK, gen_random_uuid())
+- `nombre` (TEXT, NOT NULL), `apellidos` (TEXT, NOT NULL)
+- `telefono`, `telefono2`, `contacto2`, `direccion` (TEXT, nullable)
+- `created_at` (TIMESTAMPTZ, default NOW())
+
+Tabla: pedidos
+- `id` (UUID, PK, gen_random_uuid())
+- `cliente_id` (UUID, FK -> clientes.id ON DELETE CASCADE)
+- `categoria` (categoria_pedido, default 'FLAMENCA')
+- `tipo_articulo` (TEXT, ej. 'SENORA', 'NINA')
+- `estado_ubicacion` (estado_ubicacion_pedido, default 'PEDIDO')
+- `estado_proceso` (estado_proceso_pedido, default 'PENDIENTE_LLEGADA')
+- `fabricante` (TEXT, ej. 'Ana Barroso', 'Aires de Feria', 'Carmen Moda')
+- `fecha_pedido` (DATE), `numero_talon` (TEXT)
+- `medidas` (JSONB) -> pecho, cintura, cadera, manga, talle, largo_total, contorno_brazo, talla
+- `detalles_tejido` (TEXT) -> observaciones y descripciones formateadas
+- `precio_total` (DECIMAL(10,2), default 0.00)
+- `foto_ficha_url` (TEXT), `qr_code` (TEXT)
+
+Tabla: pagos
+- `id` (UUID, PK, gen_random_uuid())
+- `pedido_id` (UUID, FK -> pedidos.id ON DELETE CASCADE)
+- `monto_entrega_cuenta` (DECIMAL(10,2), default 0.00)
+- `fecha` (DATE, default CURRENT_DATE), `metodo` (TEXT)
+
+
+--------------------------------------------------------------------------------
+5. FUNCIONAMIENTO Y LÓGICA DE NEGOCIO POR MÓDULO
+--------------------------------------------------------------------------------
+
+A) Alta de Pedidos (`NuevoPedido.tsx`)
+- Flujo en 2 pasos:
+  * Paso 1: Búsqueda dinámica con autocompletado de cliente existente por nombre,
+    apellidos o teléfono. Si no existe, se registran los campos del nuevo cliente.
+  * Paso 2: Formulario completo de pedido:
+    - Datos generales (Categoría, Tipo Señora/Niña, Fecha, Fabricante).
+    - Medidas corporales (Pecho, Cintura, Cadera, Manga, Talle, Largo, Contorno brazo, Talla).
+    - Configuración de Tejidos (Tejido principal, secundarios, cancán, cordoncillo).
+    - Desglose económico: Precio del traje + N Cargos Adicionales dinámicos (ej. Mantoncillo).
+    - Registro de la primera entrega a cuenta (crea automáticamente un registro en `pagos`).
+
+B) Gestión y Ficha del Pedido (`VistaPedidos.tsx`)
+- Estructura en 3 niveles con persistencia en `localStorage` (`paso`, `clienteId`, `pedidoId`):
+  * Paso 1: Buscador global + tarjetas de pedidos recientes.
+  * Paso 2: Listado de pedidos pertenecientes al cliente seleccionado.
+  * Paso 3: Ficha técnica interactiva del pedido:
+    - Cambio rápido de estados (Botón FÁBRICA / TIENDA y ENTREGAR).
+    - Edición in-situ de medidas, prendas y precios (`isEditing`).
+    - Control de Pagos: Histórico de entregas a cuenta, adición de nuevos pagos
+      y cálculo automático e in-situ del Restante Pendiente.
+    - Accesos directos a Llamada telefónica y WhatsApp directo para Contacto 1 y Contacto 2.
+
+C) Gestión de Clientes (`VistaClientes.tsx`)
+- Buscador reactivo por nombre, apellidos, teléfonos o personas de contacto.
+- Modo edición rápida de datos personales (nombre, teléfono, dirección).
+- Vista desplegable de pedidos por cliente con salto directo a la ficha del pedido.
+- Autocapitalización automática de nombres y apellidos al guardar.
+
+D) Consultas e Informes (`VistaConsultas.tsx`)
+- Tablero unificado de pedidos con métricas globales:
+  * Total Pedidos (Suma de precios).
+  * Total Cobrado (Suma de pagos).
+  * Restante Pendiente global.
+- Filtros acumulativos:
+  * Categoría: Flamenca / Comunión / Todos.
+  * Ubicación/Estado: Fábrica / Tienda / Entregado / Todos.
+  * Fabricante: Selector dinámico basado en los datos existentes.
+  * Búsqueda por texto libre en cliente y descripción.
+- Estilos de impresión optimizados (`@media print` y clases `no-print`) para
+  generar reportes físicos en papel o PDF directamente desde el navegador.
+
+E) Guía de Tallas (`VistaTallas.tsx`)
+- Matriz interactiva de medidas oficiales por fabricante (Ana Barroso, Aires de Feria)
+  dividida por tipo (Señora / Niña) para consulta rápida en taller.
+
+--------------------------------------------------------------------------------
+6. GUÍA PARA CONTINUAR EL DESARROLLO (NEXT STEPS)
+--------------------------------------------------------------------------------
+1. Módulo Escáner QR (`Home.tsx`):
+   - La opción QR en el menú principal actual es UI.
+   - Para completar: Integrar biblioteca de cámara (ej. `html5-qrcode` o `@zxing/library`)
+     y redirigir directamente a `/pedidos` cargando el `pedidoId` escaneado.
+
+2. Almacenamiento de Fichas / Fotos (`foto_ficha_url`):
+   - Actualmente es un campo de texto en la BBDD.
+   - Para completar: Crear un bucket público/protegido en Supabase Storage (ej. `fichas-pedidos`)
+     y añadir un input de tipo `file` en `NuevoPedido` / `VistaPedidos` para subir imágenes del traje/tejido.
+
+3. Autenticación y Permisos (Opcional):
+   - Actualmente opera en modo abierto/interno.
+   - Si se desea restringir el acceso: Habilitar Supabase Auth (Email/Password)
+     y actualizar las políticas RLS en PostgreSQL reemplazando `USING (true)` por `USING (auth.uid() IS NOT NULL)`.
+
+4. Exportación de Datos:
+   - Añadir botón de exportación a Excel / CSV desde `VistaConsultas`.
+
+--------------------------------------------------------------------------------
+7. COMANDOS ÚTILES DE DESARROLLO
+--------------------------------------------------------------------------------
+- Iniciar en desarrollo: `npm run dev`
+- Compilar para producción: `npm run build`
+- Verificación de tipos TypeScript: `npm run typecheck`
+- Construcción de imagen Docker: `docker build -t app-rosario .`
+- Ejecución de contenedor Docker: `docker run -p 8080:8080 app-rosario`
+================================================================================

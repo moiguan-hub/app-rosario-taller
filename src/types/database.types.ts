@@ -30,6 +30,8 @@ export interface Pedido {
   precio_total: number;
   foto_ficha_url: string | null;
   qr_code: string | null;
+  archivado?: boolean;
+  pedido_principal_id?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -16,6 +16,8 @@ export function NuevoPedido() {
   const [busquedaRealizada, setBusquedaRealizada] = useState(false);
 
   const [nuevoCliente, setNuevoCliente] = useState({ apellidos: '', nombre: '', telefono: '', telefono2: '', contacto2: '', direccion: '' });
+  const [pedidosActivosCliente, setPedidosActivosCliente] = useState<any[]>([]);
+  const [pedidoPrincipalId, setPedidoPrincipalId] = useState<string>('');
   const [pedido, setPedido] = useState({
     descripcion: '',
     categoria: 'FLAMENCA' as CategoriaPedido,
@@ -47,6 +49,36 @@ export function NuevoPedido() {
       });
     }
   }, []);
+
+  useEffect(() => {
+    if (clienteSeleccionado?.id) {
+      supabase
+        .from('pedidos')
+        .select('*')
+        .eq('cliente_id', clienteSeleccionado.id)
+        .or('archivado.is.null,archivado.eq.false')
+        .order('created_at', { ascending: false })
+        .then(({ data }) => {
+          setPedidosActivosCliente(data || []);
+        });
+    } else {
+      setPedidosActivosCliente([]);
+      setPedidoPrincipalId('');
+    }
+  }, [clienteSeleccionado]);
+
+  const handleSelectPedidoPrincipal = (pId: string) => {
+    setPedidoPrincipalId(pId);
+    if (pId) {
+      setPedido(prev => ({
+        ...prev,
+        precioTraje: '0',
+        entrega_cuenta: '0',
+        cargosExtra: []
+      }));
+    }
+  };
+
   useEffect(() => {
     const buscar = async () => {
       if (busqueda.trim().length < 2) {
@@ -151,7 +183,7 @@ export function NuevoPedido() {
       if (pedido.colorCordoncillo.trim()) tejidosList.push(`Color Cordoncillo: ${pedido.colorCordoncillo.trim()}`);
       const tejidosStr = tejidosList.join(' | ');
 
-      const { data: ord, error: errO } = await supabase.from('pedidos').insert([{
+      let insertData: any = {
         cliente_id: clientId,
         categoria: pedido.categoria,
         fabricante: pedido.fabricante,
@@ -164,15 +196,24 @@ export function NuevoPedido() {
           numTejidos: pedido.numTejidos, tejido1: pedido.tejido1, tejido2: pedido.tejido2, tejido3: pedido.tejido3,
           tejidoCancan: pedido.tejidoCancan, colorCordoncillo: pedido.colorCordoncillo,
           observaciones: pedido.observaciones,
-          precioTraje: pedido.precioTraje,
-          cargosExtra: pedido.cargosExtra
+          precioTraje: pedidoPrincipalId ? '0' : pedido.precioTraje,
+          cargosExtra: pedidoPrincipalId ? [] : pedido.cargosExtra
         },
         detalles_tejido: (pedido.categoria === 'FLAMENCA' ? '[' + pedido.tipo_articulo + '] ' : '') + (pedido.descripcion ? 'Modelo: ' + pedido.descripcion : '') + (tejidosStr ? ' | ' + tejidosStr : '') + (pedido.observaciones ? ' | ' + pedido.observaciones : ''), 
-        precio_total: calcularPrecioTotal()
-      }] as any).select().single();
+        precio_total: pedidoPrincipalId ? 0 : calcularPrecioTotal(),
+        pedido_principal_id: pedidoPrincipalId || null
+      };
+
+      let { data: ord, error: errO } = await supabase.from('pedidos').insert([insertData] as any).select().single();
+      if (errO && (errO.message.includes('pedido_principal_id') || errO.message.includes('schema cache'))) {
+        delete insertData.pedido_principal_id;
+        const res = await supabase.from('pedidos').insert([insertData] as any).select().single();
+        ord = res.data;
+        errO = res.error;
+      }
       if (errO) throw errO;
 
-      const entrega = parseFloat(pedido.entrega_cuenta);
+      const entrega = pedidoPrincipalId ? 0 : parseFloat(pedido.entrega_cuenta);
       if (entrega > 0) {
         const { error: errP } = await supabase.from('pagos').insert([{
           pedido_id: ord.id, monto_entrega_cuenta: entrega, fecha: new Date().toISOString().split('T')[0]
@@ -280,6 +321,7 @@ export function NuevoPedido() {
   };
 
   const limpiarFormulario = () => {
+    setPedidoPrincipalId('');
     setPedido({
       descripcion: '',
       categoria: 'FLAMENCA' as CategoriaPedido,
@@ -300,6 +342,7 @@ export function NuevoPedido() {
     });
   };
   const calcularPrecioTotal = () => {
+    if (pedidoPrincipalId) return 0;
     const pTraje = parseFloat(pedido.precioTraje) || 0;
     const pExtra = pedido.cargosExtra.reduce((acc, curr) => acc + (parseFloat(curr.precio) || 0), 0);
     return pTraje + pExtra;
@@ -555,62 +598,112 @@ export function NuevoPedido() {
           
           <div className="bg-gray-50 p-5 rounded-xl border-2 border-gray-100 space-y-4">
             <h4 className="font-bold text-gray-800 uppercase text-sm border-b pb-2">Importes y Pago a Cuenta</h4>
+
+            {pedidosActivosCliente.length > 0 && (
+              <div className="p-4 bg-amber-50/90 border-2 border-amber-200 rounded-xl space-y-2">
+                <label className="block text-xs font-bold text-amber-900 uppercase">
+                  Vincular cobro a pedido anterior de este cliente
+                </label>
+                <select
+                  value={pedidoPrincipalId}
+                  onChange={(e) => handleSelectPedidoPrincipal(e.target.value)}
+                  className="w-full p-3 border-2 border-amber-200 rounded-xl outline-none font-semibold text-sm bg-white text-amber-950 focus:border-amber-400 cursor-pointer"
+                >
+                  <option value="">-- Sin vincular (Pedido independiente con cobro propio) --</option>
+                  {pedidosActivosCliente.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.descripcion || 'Pedido'} ({p.categoria}) - {p.fecha_pedido || ''} - Total: {Number(p.precio_total || 0).toFixed(2)}€
+                    </option>
+                  ))}
+                </select>
+                {pedidoPrincipalId && (
+                  <p className="text-xs font-semibold text-amber-800">
+                    ⓘ Al vincular este pedido a un pedido anterior, el precio se establece en 0 € y el saldo se gestiona en el pedido principal seleccionado.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-6">
-              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Precio Traje (€)</label><input type="number" step="0.01" inputMode="decimal" className="w-full p-3 border rounded-lg outline-none text-lg font-semibold" value={pedido.precioTraje} onChange={e => setPedido({...pedido, precioTraje: e.target.value})} /></div>
-              <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Entrega a Cuenta (€)</label><input type="number" step="0.01" inputMode="decimal" className="w-full p-3 border rounded-lg outline-none text-lg font-semibold text-rose-600" value={pedido.entrega_cuenta} onChange={e => setPedido({...pedido, entrega_cuenta: e.target.value})} /></div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Precio Traje (€)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  inputMode="decimal"
+                  disabled={!!pedidoPrincipalId}
+                  className={`w-full p-3 border rounded-lg outline-none text-lg font-semibold ${pedidoPrincipalId ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                  value={pedidoPrincipalId ? '0' : pedido.precioTraje}
+                  onChange={e => setPedido({...pedido, precioTraje: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Entrega a Cuenta (€)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  inputMode="decimal"
+                  disabled={!!pedidoPrincipalId}
+                  className={`w-full p-3 border rounded-lg outline-none text-lg font-semibold text-rose-600 ${pedidoPrincipalId ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
+                  value={pedidoPrincipalId ? '0' : pedido.entrega_cuenta}
+                  onChange={e => setPedido({...pedido, entrega_cuenta: e.target.value})}
+                />
+              </div>
             </div>
 
             {/* Cargos Adicionales */}
-            <div className="space-y-2 pt-2 border-t border-gray-200">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-600 uppercase">Cargos Adicionales (Mantoncillo, etc.)</span>
-                <button
-                  type="button"
-                  onClick={() => setPedido({...pedido, cargosExtra: [...pedido.cargosExtra, { concepto: '', precio: '' }]})}
-                  className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded-lg flex items-center gap-1"
-                >
-                  + Añadir concepto
-                </button>
-              </div>
-
-              {pedido.cargosExtra.map((cargo, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    placeholder="Concepto (Ej. Mantoncillo)..."
-                    className="flex-1 p-2 border rounded-lg text-sm outline-none bg-white"
-                    value={cargo.concepto}
-                    onChange={e => {
-                      const newC = [...pedido.cargosExtra];
-                      newC[idx].concepto = e.target.value;
-                      setPedido({...pedido, cargosExtra: newC});
-                    }}
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="€"
-                    className="w-28 p-2 border rounded-lg text-sm outline-none font-semibold text-right bg-white"
-                    value={cargo.precio}
-                    onChange={e => {
-                      const newC = [...pedido.cargosExtra];
-                      newC[idx].precio = e.target.value;
-                      setPedido({...pedido, cargosExtra: newC});
-                    }}
-                  />
+            {!pedidoPrincipalId && (
+              <div className="space-y-2 pt-2 border-t border-gray-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-gray-600 uppercase">Cargos Adicionales (Mantoncillo, etc.)</span>
                   <button
                     type="button"
-                    onClick={() => {
-                      const newC = pedido.cargosExtra.filter((_, i) => i !== idx);
-                      setPedido({...pedido, cargosExtra: newC});
-                    }}
-                    className="text-red-500 font-bold text-sm px-1"
+                    onClick={() => setPedido({...pedido, cargosExtra: [...pedido.cargosExtra, { concepto: '', precio: '' }]})}
+                    className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded-lg flex items-center gap-1"
                   >
-                    ✕
+                    + Añadir concepto
                   </button>
                 </div>
-              ))}
-            </div>
+
+                {pedido.cargosExtra.map((cargo, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      placeholder="Concepto (Ej. Mantoncillo)..."
+                      className="flex-1 p-2 border rounded-lg text-sm outline-none bg-white"
+                      value={cargo.concepto}
+                      onChange={e => {
+                        const newC = [...pedido.cargosExtra];
+                        newC[idx].concepto = e.target.value;
+                        setPedido({...pedido, cargosExtra: newC});
+                      }}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="€"
+                      className="w-28 p-2 border rounded-lg text-sm outline-none font-semibold text-right bg-white"
+                      value={cargo.precio}
+                      onChange={e => {
+                        const newC = [...pedido.cargosExtra];
+                        newC[idx].precio = e.target.value;
+                        setPedido({...pedido, cargosExtra: newC});
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newC = pedido.cargosExtra.filter((_, i) => i !== idx);
+                        setPedido({...pedido, cargosExtra: newC});
+                      }}
+                      className="text-red-500 font-bold text-sm px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="pt-3 border-t border-gray-200 space-y-2">
               <div className="flex justify-between items-center text-sm font-semibold text-gray-700">

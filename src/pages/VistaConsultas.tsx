@@ -1,16 +1,33 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Printer, ArrowLeft, Filter, RefreshCw, CheckCircle, Factory, PackageCheck } from 'lucide-react';
+import { Search, Printer, ArrowLeft, Filter, RefreshCw, CheckCircle, Factory, PackageCheck, Archive, AlertTriangle, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export function VistaConsultas() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [pedidos, setPedidos] = useState<any[]>([]);
+  const [verArchivados, setVerArchivados] = useState<boolean>(false);
   const [filtroCategoria, setFiltroCategoria] = useState<'FLAMENCA' | 'COMUNION' | 'TODOS'>('FLAMENCA');
   const [filtroEstado, setFiltroEstado] = useState<'TODOS' | 'FABRICA' | 'TIENDA' | 'ENTREGADO'>('TODOS');
   const [filtroFabricante, setFiltroFabricante] = useState<string>('TODOS');
   const [busqueda, setBusqueda] = useState<string>('');
+
+  // Modal de Seguridad Cierre de Campaña
+  const [showCierreModal, setShowCierreModal] = useState<boolean>(false);
+  const [segundosRestantes, setSegundosRestantes] = useState<number>(5);
+
+  useEffect(() => {
+    let interval: any = null;
+    if (showCierreModal && segundosRestantes > 0) {
+      interval = setInterval(() => {
+        setSegundosRestantes((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [showCierreModal, segundosRestantes]);
 
   const cargarDatos = async () => {
     setLoading(true);
@@ -42,6 +59,65 @@ export function VistaConsultas() {
     }
   };
 
+  const abrirModalCierre = () => {
+    setSegundosRestantes(5);
+    setShowCierreModal(true);
+  };
+
+  const ejecutarCierreCampana = async () => {
+    const campana = localStorage.getItem('campana_activa') || 'FLAMENCA';
+    setLoading(true);
+    setShowCierreModal(false);
+    try {
+      const { error } = await supabase
+        .from('pedidos')
+        .update({ archivado: true })
+        .eq('categoria', campana)
+        .eq('archivado', false);
+
+      if (error) {
+        alert('Error al cerrar la campaña: ' + error.message);
+      } else {
+        alert(`Cierre de campaña "${campana}" completado con éxito. Los pedidos se han archivado.`);
+        await cargarDatos();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Error imprevisto al procesar el cierre de campaña.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReabrirCampana = async () => {
+    const campana = localStorage.getItem('campana_activa') || 'FLAMENCA';
+    const confirmacion = window.confirm(
+      `¿Deseas reabrir y desarchivar la campaña "${campana}"? Todos los pedidos archivados de esta categoría volverán a estar activos.`
+    );
+    if (!confirmacion) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('pedidos')
+        .update({ archivado: false })
+        .eq('categoria', campana)
+        .eq('archivado', true);
+
+      if (error) {
+        alert('Error al reabrir la campaña: ' + error.message);
+      } else {
+        alert(`Campaña "${campana}" reabierta con éxito.`);
+        await cargarDatos();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Error imprevisto al reabrir la campaña.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     cargarDatos();
   }, []);
@@ -62,6 +138,10 @@ export function VistaConsultas() {
   const fabricantes = Array.from(new Set(pedidos.map(p => p.fabricante).filter(Boolean)));
 
   const baseParaConteo = pedidos.filter(p => {
+    // Filtro archivado
+    const isArchived = Boolean(p.archivado);
+    if (isArchived !== verArchivados) return false;
+
     // Filtro categoría
     if (filtroCategoria !== 'TODOS') {
       if (filtroCategoria === 'FLAMENCA') {
@@ -114,6 +194,7 @@ export function VistaConsultas() {
     setFiltroEstado('TODOS');
     setFiltroFabricante('TODOS');
     setBusqueda('');
+    setVerArchivados(false);
   };
 
   const irAPedido = (p: any) => {
@@ -147,13 +228,40 @@ export function VistaConsultas() {
           <p className="text-xs text-gray-500 font-medium">Pedidos ordenados por apellidos y análisis económico</p>
         </div>
 
-        <button onClick={() => window.print()} className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md">
-          <Printer size={18} /> Informe / Imprimir PDF
-        </button>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {!verArchivados ? (
+            <button onClick={abrirModalCierre} className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-colors">
+              <Archive size={18} /> Cierre de Campaña
+            </button>
+          ) : (
+            <button onClick={handleReabrirCampana} className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-colors">
+              <RotateCcw size={18} /> Reabrir / Desarchivar Campaña
+            </button>
+          )}
+          <button onClick={() => window.print()} className="flex-1 sm:flex-none bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md">
+            <Printer size={18} /> Informe / Imprimir PDF
+          </button>
+        </div>
       </div>
 
       {/* Barra de Filtros */}
       <div className="no-print bg-white p-4 rounded-2xl border-2 border-gray-100 shadow-sm space-y-3">
+        {/* Selector Activos / Histórico Archivado */}
+        <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl w-fit">
+          <button
+            onClick={() => setVerArchivados(false)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${!verArchivados ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+          >
+            Pedidos Activos
+          </button>
+          <button
+            onClick={() => setVerArchivados(true)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${verArchivados ? 'bg-amber-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+          >
+            Histórico Archivado
+          </button>
+        </div>
+
         {/* Selección de Categoría */}
         <div className="flex gap-2 border-b pb-3">
           <button onClick={() => setFiltroCategoria('FLAMENCA')} className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all ${filtroCategoria === 'FLAMENCA' ? 'bg-rose-600 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
@@ -294,6 +402,70 @@ export function VistaConsultas() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal de Seguridad para Cierre de Campaña */}
+      {showCierreModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm no-print">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border-2 border-red-500 animate-in fade-in zoom-in-95 duration-200">
+            {/* Encabezado grave de advertencia */}
+            <div className="bg-red-600 text-white p-4 flex items-center gap-3">
+              <div className="p-2 bg-red-700 rounded-xl shrink-0">
+                <AlertTriangle size={24} className="text-white" />
+              </div>
+              <div>
+                <h3 className="font-black text-lg leading-tight">¡ADVERTENCIA GRAVE!</h3>
+                <p className="text-xs text-red-100 font-medium">Cierre de Campaña Activa</p>
+              </div>
+            </div>
+
+            {/* Contenido explicativo del proceso */}
+            <div className="p-5 space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800 font-medium space-y-1">
+                <p className="font-bold text-red-900">
+                  Estás a punto de archivar todos los pedidos activos de la campaña:
+                </p>
+                <p className="text-sm font-black text-red-700 uppercase">
+                  {localStorage.getItem('campana_activa') || 'FLAMENCA'}
+                </p>
+                <ul className="list-disc list-inside space-y-1 pt-1 text-red-800">
+                  <li>Todos los pedidos de esta categoría pasarán al <strong>Histórico Archivado</strong>.</li>
+                  <li>Dejarán de aparecer en las listas de pedidos activos principales.</li>
+                  <li>Esta operación se puede revertir desarchivando la campaña en la vista Histórico.</li>
+                </ul>
+              </div>
+
+              <p className="text-xs text-gray-500 text-center font-medium">
+                Por seguridad, debes esperar a que venza la cuenta regresiva para confirmar.
+              </p>
+
+              {/* Botones de acción */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <button
+                  onClick={() => setShowCierreModal(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2.5 rounded-xl text-xs transition-colors"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  disabled={segundosRestantes > 0}
+                  onClick={ejecutarCierreCampana}
+                  className={`flex-1 font-extrabold px-4 py-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 ${
+                    segundosRestantes > 0
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200 cursor-pointer'
+                  }`}
+                >
+                  <Archive size={14} />
+                  {segundosRestantes > 0
+                    ? `Entendido, cerrar campaña (${segundosRestantes}s)...`
+                    : 'Entendido, cerrar campaña'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
