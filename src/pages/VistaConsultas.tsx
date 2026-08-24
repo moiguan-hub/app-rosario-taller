@@ -89,8 +89,23 @@ export function VistaConsultas() {
     }
   };
 
+  const reabrirCampanaPorAnio = async (categoria: string, anio: number) => {
+    const fechaInicio = `${anio}-01-01`;
+    const fechaFin = `${anio}-12-31`;
+
+    const { error } = await supabase
+      .from('pedidos')
+      .update({ archivado: false })
+      .eq('categoria', categoria)
+      .gte('fecha_pedido', fechaInicio)
+      .lte('fecha_pedido', fechaFin);
+
+    return { error };
+  };
+
   const handleReabrirCampana = async () => {
     const campana = localStorage.getItem('campana_activa') || 'FLAMENCA';
+    const anioActual = new Date().getFullYear();
     const confirmacion = window.confirm(
       `¿Deseas reabrir y desarchivar la campaña "${campana}"? Todos los pedidos archivados de esta categoría volverán a estar activos.`
     );
@@ -98,11 +113,7 @@ export function VistaConsultas() {
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('pedidos')
-        .update({ archivado: false })
-        .eq('categoria', campana)
-        .eq('archivado', true);
+      const { error } = await reabrirCampanaPorAnio(campana, anioActual);
 
       if (error) {
         alert('Error al reabrir la campaña: ' + error.message);
@@ -268,7 +279,7 @@ export function VistaConsultas() {
             💃 Flamenca
           </button>
           <button onClick={() => setFiltroCategoria('COMUNION')} className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all ${filtroCategoria === 'COMUNION' ? 'bg-rose-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            ⛪ Comunión <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full font-extrabold ml-1">Próximamente</span>
+            ⛪ Comunión
           </button>
           <button onClick={() => setFiltroCategoria('TODOS')} className={`py-2 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all ${filtroCategoria === 'TODOS' ? 'bg-gray-800 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
             Todas

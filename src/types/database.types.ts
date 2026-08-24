@@ -19,6 +19,7 @@ export interface Pedido {
   descripcion: string;
   categoria: CategoriaPedido;
   tipo_articulo?: 'NINA' | 'SENORA' | null;
+  estilo_comunion?: 'Calle' | 'Marinero' | 'Almirante' | null;
 
   estado_ubicacion: EstadoUbicacion;
   estado_proceso: EstadoProceso;

@@ -3,6 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone, MessageCircle, PackageCheck, Ticket, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Cliente, Pedido, Pago } from '../types/database.types';
+import { FABRICANTES_POR_CATEGORIA } from '../constants/fabricantes';
+import { TALLAS_NOVADRIMA_NINO, TALLAS_ANA_ROSILLO_NINA, TALLAS_ANAVIG_NINA } from '../constants/tallas';
+
+const isComunionNinaRosilloAnavig = (categoria?: string | null, fabricante?: string | null) => {
+  const cat = (categoria || '').toUpperCase();
+  if (cat !== 'COMUNION') return false;
+  const fab = (fabricante || '').toLowerCase();
+  return fab.includes('anavig') || fab.includes('ana rosillo') || fab.includes('lola rosillo') || fab.includes('rosillo');
+};
 
 export function VistaPedidos() {
   const navigate = useNavigate();
@@ -18,8 +27,17 @@ export function VistaPedidos() {
   const [loadingPago, setLoadingPago] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
-    descripcion: '', fabricante: '', fecha_pedido: '', numero_talon: '', tipo_articulo: 'SENORA',
-    pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', talla: '',
+    descripcion: '', fabricante: '', estilo_comunion: 'Calle' as 'Calle' | 'Marinero' | 'Almirante' | null, fecha_pedido: '', numero_talon: '', tipo_articulo: 'SENORA',
+    pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', espalda: '', talla: '', talla_especial_detalle: '',
+    chaqueta: '', chaquetaOrigen: 'fabrica',
+    pantalon: '', pantalonOrigen: 'fabrica',
+    chalequillo: '', chalequilloOrigen: 'fabrica',
+    camisa: '', camisaOrigen: 'fabrica',
+    camisaTEsp: '',
+    incluirCorbata: false, precioCorbata: '0',
+    incluirCancan: false, precioCancan: '0',
+    incluirAdornoPelo: false, precioAdornoPelo: '0',
+    incluirConjuntoInterior: false, precioConjuntoInterior: '0',
     numTejidos: 1, tejido1: '', tejido2: '', tejido3: '', tejidoCancan: '', colorCordoncillo: '',
     precioTraje: '', cargosExtra: [] as Array<{ concepto: string; precio: string }>,
     detalles_tejido: '', precio_total: ''
@@ -31,6 +49,27 @@ export function VistaPedidos() {
   const [modalContacto, setModalContacto] = useState<{ tipo: 'call' | 'wa', tel1: string, nom1: string, tel2: string, nom2: string } | null>(null);
   const [pedidoPrincipal, setPedidoPrincipal] = useState<Pedido | null>(null);
   const [clienteExpandidoId, setClienteExpandidoId] = useState<string | null>(null);
+
+  const handleFabricanteChangeVista = (fabNombre: string) => {
+    const cat = pedidoSeleccionado?.categoria || 'FLAMENCA';
+    const fabList = FABRICANTES_POR_CATEGORIA[cat] || [];
+    const fabObj = fabList.find(f => f.nombre === fabNombre || f.id === fabNombre);
+    let nuevoTipo = editForm.tipo_articulo;
+
+    if (cat === 'COMUNION' && fabObj) {
+      if (fabObj.genero === 'Nina') {
+        nuevoTipo = 'NINA';
+      } else if (fabObj.genero === 'Nino') {
+        nuevoTipo = 'NINO';
+      }
+    }
+
+    setEditForm(prev => ({
+      ...prev,
+      fabricante: fabNombre,
+      tipo_articulo: nuevoTipo
+    }));
+  };
 
   useEffect(() => {
     if (pedidoSeleccionado?.pedido_principal_id) {
@@ -191,13 +230,31 @@ export function VistaPedidos() {
     setEditForm({
       descripcion: pedidoSeleccionado.descripcion || m.modelo || (pedidoSeleccionado.detalles_tejido && pedidoSeleccionado.detalles_tejido.split(' | ')[0]) || '',
       fabricante: pedidoSeleccionado.fabricante || '',
+      estilo_comunion: pedidoSeleccionado.estilo_comunion || 'Calle',
       fecha_pedido: pedidoSeleccionado.fecha_pedido || '',
       numero_talon: pedidoSeleccionado.numero_talon || '',
       tipo_articulo: m.tipo_articulo || 'SENORA',
       pecho: m.pecho || '', cintura: m.cintura || '',
       cadera: m.cadera || '', manga: m.manga || '',
       talle: m.talle || '', largo_total: m.largo_total || '',
-      contorno_brazo: m.contorno_brazo || '', talla: m.talla || '',
+      contorno_brazo: m.contorno_brazo || '', espalda: m.espalda || '', talla: m.talla || '', talla_especial_detalle: m.talla_especial_detalle || '',
+      chaqueta: m.chaqueta || '',
+      chaquetaOrigen: m.chaqueta_origen || 'fabrica',
+      pantalon: m.pantalon || '',
+      pantalonOrigen: m.pantalon_origen || 'fabrica',
+      chalequillo: m.chalequillo || '',
+      chalequilloOrigen: m.chalequillo_origen || 'fabrica',
+      camisa: m.camisa || '',
+      camisaOrigen: m.camisa_origen || 'fabrica',
+      camisaTEsp: m.camisa_tesp || '',
+      incluirCorbata: Boolean(m.incluir_corbata),
+      precioCorbata: m.precio_corbata !== undefined ? String(m.precio_corbata) : '0',
+      incluirCancan: Boolean(m.incluir_cancan),
+      precioCancan: m.precio_cancan !== undefined ? String(m.precio_cancan) : '0',
+      incluirAdornoPelo: Boolean(m.incluir_adorno_pelo),
+      precioAdornoPelo: m.precio_adorno_pelo !== undefined ? String(m.precio_adorno_pelo) : '0',
+      incluirConjuntoInterior: Boolean(m.incluir_conjunto_interior),
+      precioConjuntoInterior: m.precio_conjunto_interior !== undefined ? String(m.precio_conjunto_interior) : '0',
       numTejidos: m.numTejidos || 1,
       tejido1: m.tejido1 || '',
       tejido2: m.tejido2 || '',
@@ -219,17 +276,27 @@ export function VistaPedidos() {
     if (!pedidoSeleccionado) return;
     if (!window.confirm("¡Atención! Vas a modificar los datos de este pedido. ¿Confirmas los cambios?")) return;
 
+    const esComunion = pedidoSeleccionado.categoria === 'COMUNION';
+
     const tejidosList = [];
-    if (editForm.tejido1.trim()) tejidosList.push(`Tejido 1: ${editForm.tejido1.trim()}`);
-    if (editForm.numTejidos >= 2 && editForm.tejido2.trim()) tejidosList.push(`Tejido 2: ${editForm.tejido2.trim()}`);
-    if (editForm.numTejidos >= 3 && editForm.tejido3.trim()) tejidosList.push(`Tejido 3: ${editForm.tejido3.trim()}`);
-    if (editForm.tejidoCancan.trim()) tejidosList.push(`Tejido Can Can: ${editForm.tejidoCancan.trim()}`);
-    if (editForm.colorCordoncillo.trim()) tejidosList.push(`Color Cordoncillo: ${editForm.colorCordoncillo.trim()}`);
+    if (!esComunion) {
+      if (editForm.tejido1.trim()) tejidosList.push(`Tejido 1: ${editForm.tejido1.trim()}`);
+      if (editForm.numTejidos >= 2 && editForm.tejido2.trim()) tejidosList.push(`Tejido 2: ${editForm.tejido2.trim()}`);
+      if (editForm.numTejidos >= 3 && editForm.tejido3.trim()) tejidosList.push(`Tejido 3: ${editForm.tejido3.trim()}`);
+      if (editForm.tejidoCancan.trim()) tejidosList.push(`Tejido Can Can: ${editForm.tejidoCancan.trim()}`);
+      if (editForm.colorCordoncillo.trim()) tejidosList.push(`Color Cordoncillo: ${editForm.colorCordoncillo.trim()}`);
+    }
     const tejidosStr = tejidosList.join(' | ');
 
+    const isNovadrima = editForm.fabricante?.trim().toLowerCase() === 'novadrima';
+    const isComunionNina = isComunionNinaRosilloAnavig(pedidoSeleccionado.categoria, editForm.fabricante);
     const pTraje = parseFloat(editForm.precioTraje) || 0;
     const pExtras = (editForm.cargosExtra || []).reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0);
-    const upPrecio = pedidoSeleccionado.pedido_principal_id ? 0 : (pTraje + pExtras);
+    const pCorbata = (isNovadrima && editForm.incluirCorbata) ? (parseFloat(editForm.precioCorbata) || 0) : 0;
+    const pCancan = (isComunionNina && editForm.incluirCancan) ? (parseFloat(editForm.precioCancan) || 0) : 0;
+    const pAdornoPelo = (isComunionNina && editForm.incluirAdornoPelo) ? (parseFloat(editForm.precioAdornoPelo) || 0) : 0;
+    const pConjunto = ((isNovadrima || isComunionNina) && editForm.incluirConjuntoInterior) ? (parseFloat(editForm.precioConjuntoInterior) || 0) : 0;
+    const upPrecio = pedidoSeleccionado.pedido_principal_id ? 0 : (pTraje + pExtras + pCorbata + pCancan + pAdornoPelo + pConjunto);
 
     const upMed = {
       ...pedidoSeleccionado.medidas,
@@ -239,19 +306,38 @@ export function VistaPedidos() {
       cargosExtra: editForm.cargosExtra,
       pecho: editForm.pecho, cintura: editForm.cintura, cadera: editForm.cadera,
       manga: editForm.manga, talle: editForm.talle, largo_total: editForm.largo_total,
-      contorno_brazo: editForm.contorno_brazo, talla: editForm.talla,
-      numTejidos: editForm.numTejidos,
-      tejido1: editForm.tejido1,
-      tejido2: editForm.tejido2,
-      tejido3: editForm.tejido3,
-      tejidoCancan: editForm.tejidoCancan,
-      colorCordoncillo: editForm.colorCordoncillo,
+      contorno_brazo: editForm.contorno_brazo, espalda: editForm.espalda, talla: editForm.talla,
+      talla_especial_detalle: editForm.talla === 'TEsp' ? editForm.talla_especial_detalle : '',
+      chaqueta: editForm.chaqueta,
+      chaqueta_origen: editForm.chaquetaOrigen || 'fabrica',
+      pantalon: editForm.pantalon,
+      pantalon_origen: editForm.pantalonOrigen || 'fabrica',
+      chalequillo: editForm.chalequillo,
+      chalequillo_origen: editForm.chalequilloOrigen || 'fabrica',
+      camisa: editForm.camisa,
+      camisa_origen: editForm.camisaOrigen || 'fabrica',
+      camisa_tesp: editForm.camisa === 'TEsp' ? editForm.camisaTEsp : '',
+      incluir_corbata: editForm.incluirCorbata,
+      precio_corbata: editForm.incluirCorbata ? Number(editForm.precioCorbata || 0) : 0,
+      incluir_cancan: editForm.incluirCancan,
+      precio_cancan: editForm.incluirCancan ? Number(editForm.precioCancan || 0) : 0,
+      incluir_adorno_pelo: editForm.incluirAdornoPelo,
+      precio_adorno_pelo: editForm.incluirAdornoPelo ? Number(editForm.precioAdornoPelo || 0) : 0,
+      incluir_conjunto_interior: editForm.incluirConjuntoInterior,
+      precio_conjunto_interior: editForm.incluirConjuntoInterior ? Number(editForm.precioConjuntoInterior || 0) : 0,
+      numTejidos: esComunion ? null : editForm.numTejidos,
+      tejido1: esComunion ? '' : editForm.tejido1,
+      tejido2: esComunion ? '' : editForm.tejido2,
+      tejido3: esComunion ? '' : editForm.tejido3,
+      tejidoCancan: esComunion ? '' : editForm.tejidoCancan,
+      colorCordoncillo: esComunion ? '' : editForm.colorCordoncillo,
       observaciones: editForm.detalles_tejido
     };
     const combinedDetalles = (editForm.tipo_articulo === 'SENORA' || editForm.tipo_articulo === 'NINA' ? '[' + editForm.tipo_articulo + '] ' : '') + (editForm.descripcion ? 'Modelo: ' + editForm.descripcion : '') + (tejidosStr ? ' | ' + tejidosStr : '') + (editForm.detalles_tejido ? ' | ' + editForm.detalles_tejido : '');
 
     const payload: any = {
       fabricante: editForm.fabricante,
+      estilo_comunion: editForm.fabricante === 'Novadrima' || editForm.estilo_comunion ? editForm.estilo_comunion : null,
       fecha_pedido: editForm.fecha_pedido || null,
       numero_talon: editForm.numero_talon || null,
       medidas: upMed,
@@ -277,12 +363,404 @@ export function VistaPedidos() {
     if (updatedPagos) setPagos(updatedPagos);
 
     if (!error) {
-      const pNew = { ...pedidoSeleccionado, fabricante: editForm.fabricante, fecha_pedido: editForm.fecha_pedido || null, numero_talon: editForm.numero_talon || null, medidas: upMed, detalles_tejido: combinedDetalles, precio_total: upPrecio };
+      const pNew = {
+        ...pedidoSeleccionado,
+        fabricante: editForm.fabricante,
+        estilo_comunion: editForm.estilo_comunion,
+        fecha_pedido: editForm.fecha_pedido || null,
+        numero_talon: editForm.numero_talon || null,
+        medidas: upMed,
+        detalles_tejido: combinedDetalles,
+        precio_total: upPrecio
+      };
       setPedidoSeleccionado(pNew);
       setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
       setIsEditing(false);
       alert("Cambios guardados con éxito.");
     } else alert('Error: ' + error.message);
+  };
+
+  const renderVistaNovadrimaLectura = () => {
+    const m = pedidoSeleccionado?.medidas || {};
+    const getOrigenBadge = (origen?: string) => {
+      const isTienda = origen === 'tienda';
+      return (
+        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-1 ${isTienda ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-blue-50 text-blue-800 border border-blue-200'}`}>
+          {isTienda ? '🏬 En Tienda' : '🏭 Pedir a Fábrica'}
+        </span>
+      );
+    };
+
+    return (
+      <div className="bg-amber-50/50 p-4 rounded-2xl border-2 border-amber-200 space-y-4">
+        <div className="flex justify-between items-center border-b border-amber-200 pb-2">
+          <h4 className="font-extrabold text-amber-900 uppercase text-xs md:text-sm tracking-wide">
+            Piezas y Tallas Novadrima
+          </h4>
+        </div>
+        
+        <div className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-2.5">
+          <div className="bg-white border border-amber-200 p-2.5 rounded-xl text-center flex flex-col justify-between items-center">
+            <div>
+              <p className="text-xs font-bold text-amber-800 uppercase">Chaqueta</p>
+              <p className="text-lg md:text-xl font-black text-gray-900 mt-1">{m.chaqueta || '-'}</p>
+            </div>
+            {m.chaqueta && getOrigenBadge(m.chaqueta_origen)}
+          </div>
+          <div className="bg-white border border-amber-200 p-2.5 rounded-xl text-center flex flex-col justify-between items-center">
+            <div>
+              <p className="text-xs font-bold text-amber-800 uppercase">Pantalón</p>
+              <p className="text-lg md:text-xl font-black text-gray-900 mt-1">{m.pantalon || '-'}</p>
+            </div>
+            {m.pantalon && getOrigenBadge(m.pantalon_origen)}
+          </div>
+          <div className="bg-white border border-amber-200 p-2.5 rounded-xl text-center flex flex-col justify-between items-center">
+            <div>
+              <p className="text-xs font-bold text-amber-800 uppercase">Chalequillo</p>
+              <p className="text-lg md:text-xl font-black text-gray-900 mt-1">{m.chalequillo || '-'}</p>
+            </div>
+            {m.chalequillo && getOrigenBadge(m.chalequillo_origen)}
+          </div>
+          <div className="bg-white border border-amber-200 p-2.5 rounded-xl text-center flex flex-col justify-between items-center">
+            <div>
+              <p className="text-xs font-bold text-amber-800 uppercase">Camisa</p>
+              <p className="text-lg md:text-xl font-black text-gray-900 mt-1">
+                {m.camisa === 'TEsp' ? `TEsp (${m.camisa_tesp || ''})` : (m.camisa ? `T${m.camisa}` : '-')}
+              </p>
+            </div>
+            {m.camisa && getOrigenBadge(m.camisa_origen)}
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-amber-200/80">
+          <h5 className="text-xs font-extrabold text-amber-900 uppercase mb-2">
+            Complementos Opcionales
+          </h5>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <div className="bg-white border border-amber-200 p-2.5 rounded-xl flex justify-between items-center">
+              <span className="font-bold text-gray-700">Corbata:</span>
+              <span className="font-black text-amber-900">
+                {m.incluir_corbata ? `Incluida (${m.precio_corbata ?? 0} €)` : 'No incluida'}
+              </span>
+            </div>
+            <div className="bg-white border border-amber-200 p-2.5 rounded-xl flex justify-between items-center">
+              <span className="font-bold text-gray-700">Conjunto Interior:</span>
+              <span className="font-black text-amber-900">
+                {m.incluir_conjunto_interior ? `Incluido (${m.precio_conjunto_interior ?? 0} €)` : 'No incluido'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderVistaNovadrimaEdicion = () => (
+    <div className="bg-amber-50/60 p-4 rounded-xl border-2 border-amber-200 space-y-4">
+      <h4 className="font-extrabold text-amber-900 uppercase text-xs md:text-sm tracking-wide">
+        Piezas y Tallas Novadrima
+      </h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Chaqueta', field: 'chaqueta', origenField: 'chaquetaOrigen' },
+          { label: 'Pantalón', field: 'pantalon', origenField: 'pantalonOrigen' },
+          { label: 'Chalequillo', field: 'chalequillo', origenField: 'chalequilloOrigen' },
+        ].map(p => (
+          <div key={p.field} className="bg-white p-2.5 rounded-lg border border-amber-200 flex flex-col justify-between space-y-2">
+            <div>
+              <label className="block text-xs font-bold text-amber-900 uppercase mb-1">{p.label}</label>
+              <select
+                className="w-full p-2 border rounded-lg font-bold text-gray-800 bg-white text-sm outline-none"
+                value={(editForm as any)[p.field]}
+                onChange={e => setEditForm({ ...editForm, [p.field]: e.target.value })}
+              >
+                <option value="">Seleccionar...</option>
+                {['T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12', 'T13', 'T14'].map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Origen / Estado</label>
+              <select
+                className="w-full p-1.5 border rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 outline-none"
+                value={(editForm as any)[p.origenField] || 'fabrica'}
+                onChange={e => setEditForm({ ...editForm, [p.origenField]: e.target.value })}
+              >
+                <option value="fabrica">🏭 Pedir a Fábrica</option>
+                <option value="tienda">🏬 En Tienda</option>
+              </select>
+            </div>
+          </div>
+        ))}
+
+        <div className="bg-white p-2.5 rounded-lg border border-amber-200 flex flex-col justify-between space-y-2">
+          <div>
+            <label className="block text-xs font-bold text-amber-900 uppercase mb-1">Camisa</label>
+            <select
+              className="w-full p-2 border rounded-lg font-bold text-gray-800 bg-white text-sm outline-none"
+              value={editForm.camisa}
+              onChange={e => setEditForm({ ...editForm, camisa: e.target.value })}
+            >
+              <option value="">Seleccionar...</option>
+              {['29', '30', '31', '32', '33', '34', '35', '36', 'TEsp'].map(t => (
+                <option key={t} value={t}>{t === 'TEsp' ? 'TEsp' : `T${t}`}</option>
+              ))}
+            </select>
+            {editForm.camisa === 'TEsp' && (
+              <input
+                type="text"
+                placeholder="Especificación a mano..."
+                className="w-full mt-2 p-1.5 border rounded-lg font-medium text-gray-800 bg-amber-50/50 text-xs outline-none"
+                value={editForm.camisaTEsp}
+                onChange={e => setEditForm({ ...editForm, camisaTEsp: e.target.value })}
+              />
+            )}
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Origen / Estado</label>
+            <select
+              className="w-full p-1.5 border rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 outline-none"
+              value={editForm.camisaOrigen || 'fabrica'}
+              onChange={e => setEditForm({ ...editForm, camisaOrigen: e.target.value })}
+            >
+              <option value="fabrica">🏭 Pedir a Fábrica</option>
+              <option value="tienda">🏬 En Tienda</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-3 border-t border-amber-200/80 space-y-3">
+        <h5 className="text-xs font-extrabold text-amber-900 uppercase tracking-wide">
+          Complementos Opcionales
+        </h5>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="bg-white p-3 rounded-lg border border-amber-200 flex flex-col justify-between gap-2">
+            <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-gray-800">
+              <input
+                type="checkbox"
+                className="w-4 h-4 text-amber-600 rounded"
+                checked={editForm.incluirCorbata}
+                onChange={e => setEditForm({ ...editForm, incluirCorbata: e.target.checked })}
+              />
+              <span>Incluir Corbata</span>
+            </label>
+            {editForm.incluirCorbata && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-600">Precio (€):</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="w-28 p-1.5 border rounded-lg font-bold text-gray-800 bg-amber-50/50 text-right text-sm outline-none focus:border-amber-400"
+                  value={editForm.precioCorbata}
+                  onChange={e => setEditForm({ ...editForm, precioCorbata: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white p-3 rounded-lg border border-amber-200 flex flex-col justify-between gap-2">
+            <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-gray-800">
+              <input
+                type="checkbox"
+                className="w-4 h-4 text-amber-600 rounded"
+                checked={editForm.incluirConjuntoInterior}
+                onChange={e => setEditForm({ ...editForm, incluirConjuntoInterior: e.target.checked })}
+              />
+              <span>Incluir Conjunto Interior</span>
+            </label>
+            {editForm.incluirConjuntoInterior && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-600">Precio (€):</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="w-28 p-1.5 border rounded-lg font-bold text-gray-800 bg-amber-50/50 text-right text-sm outline-none focus:border-amber-400"
+                  value={editForm.precioConjuntoInterior}
+                  onChange={e => setEditForm({ ...editForm, precioConjuntoInterior: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderVistaComunionNinaEdicion = () => {
+    const camposMedidas = [
+      { id: 'espalda', label: 'Espalda (cm)' },
+      { id: 'pecho', label: 'Pecho (cm)' },
+      { id: 'cintura', label: 'Cintura (cm)' },
+      { id: 'talle', label: 'Largo Talle (cm)' },
+      { id: 'largo_total', label: 'Largo Total (cm)' },
+      { id: 'contorno_brazo', label: 'Contorno Brazo (cm)' },
+    ];
+    const complementos = [
+      { id: 'Cancan', label: 'Can Can', flag: 'incluirCancan', price: 'precioCancan' },
+      { id: 'AdornoPelo', label: 'Adorno Pelo', flag: 'incluirAdornoPelo', price: 'precioAdornoPelo' },
+      { id: 'ConjuntoInterior', label: 'Conjunto Interior', flag: 'incluirConjuntoInterior', price: 'precioConjuntoInterior' },
+    ];
+
+    return (
+      <div className="bg-rose-50/60 p-4 rounded-xl border-2 border-rose-200 space-y-4">
+        <h4 className="font-extrabold text-rose-900 uppercase text-xs md:text-sm tracking-wide">
+          Medidas Comunión Niña
+        </h4>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {camposMedidas.map(campo => {
+            const val = (editForm as any)[campo.id];
+            const sug = getSugerenciaTallaVista(campo.id, val, pedidoSeleccionado);
+            return (
+              <div key={campo.id} className="bg-white border border-rose-200 p-2 rounded-xl flex flex-col items-center">
+                <p className="text-xs font-bold text-rose-900 uppercase flex items-center gap-1">
+                  <span>{campo.label}</span>
+                  {sug && <span className="text-blue-600 font-black">(T{sug})</span>}
+                </p>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  className="w-full text-center mt-1 p-1 border rounded font-bold text-gray-800 outline-none focus:border-rose-400 text-lg"
+                  value={val}
+                  onChange={e => setEditForm({ ...editForm, [campo.id]: e.target.value })}
+                />
+              </div>
+            );
+          })}
+
+          <div className={`bg-rose-100/80 border border-rose-200 p-2 rounded-xl flex flex-col items-center ${editForm.talla === 'TEsp' ? 'col-span-2 md:col-span-2' : ''}`}>
+            <p className="text-xs font-bold text-rose-900 uppercase">TALLA</p>
+            <div className="w-full flex flex-col sm:flex-row items-center gap-2 mt-1">
+              <select
+                className="w-full text-center p-1 border rounded font-bold text-rose-900 bg-white outline-none focus:border-rose-400 text-xs md:text-sm"
+                value={editForm.talla}
+                onChange={e => setEditForm({ ...editForm, talla: e.target.value })}
+              >
+                <option value="">-</option>
+                {['100', '105', '110', '115', '120', '125', '130', '135', 'TEsp'].map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              {editForm.talla === 'TEsp' && (
+                <input
+                  type="text"
+                  placeholder="Talla especial..."
+                  className="w-full text-center p-1 border rounded font-bold text-rose-900 bg-white outline-none focus:border-rose-400 text-xs md:text-sm"
+                  value={editForm.talla_especial_detalle || ''}
+                  onChange={e => setEditForm({ ...editForm, talla_especial_detalle: e.target.value })}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-3 border-t border-rose-200/80 space-y-3">
+          <h5 className="text-xs font-extrabold text-rose-900 uppercase tracking-wide">
+            Complementos Opcionales
+          </h5>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {complementos.map(c => {
+              const active = Boolean((editForm as any)[c.flag]);
+              return (
+                <div key={c.id} className="bg-white p-3 rounded-lg border border-rose-200 flex flex-col justify-between gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-gray-800">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 text-rose-600 rounded"
+                      checked={active}
+                      onChange={e => setEditForm({ ...editForm, [c.flag]: e.target.checked })}
+                    />
+                    <span>{c.label}</span>
+                  </label>
+                  {active && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-gray-600">Precio (€):</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-24 p-1.5 border rounded-lg font-bold text-gray-800 bg-rose-50/50 text-right text-sm"
+                        value={(editForm as any)[c.price]}
+                        onChange={e => setEditForm({ ...editForm, [c.price]: e.target.value })}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderVistaComunionNinaLectura = () => {
+    const m = pedidoSeleccionado?.medidas || {};
+    const campos = [
+      { label: 'Espalda', val: m.espalda },
+      { label: 'Pecho', val: m.pecho },
+      { label: 'Cintura', val: m.cintura },
+      { label: 'Largo Talle', val: m.talle },
+      { label: 'Largo Total', val: m.largo_total },
+      { label: 'Contorno Brazo', val: m.contorno_brazo },
+    ];
+
+    return (
+      <div className="bg-rose-50/50 p-4 rounded-2xl border-2 border-rose-200 space-y-4">
+        <div className="flex justify-between items-center border-b border-rose-200 pb-2">
+          <h4 className="font-extrabold text-rose-900 uppercase text-xs md:text-sm tracking-wide">
+            Medidas Vestido Comunión Niña
+          </h4>
+        </div>
+
+        <div className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-2.5">
+          {campos.map(c => (
+            <div key={c.label} className="bg-white border border-rose-200 p-2.5 rounded-xl text-center">
+              <p className="text-xs font-bold text-rose-800 uppercase">{c.label}</p>
+              <p className="text-lg md:text-xl font-black text-gray-900 mt-1">{c.val || '-'}</p>
+            </div>
+          ))}
+          <div className="bg-rose-100 border border-rose-200 p-2.5 rounded-xl text-center">
+            <p className="text-xs font-bold text-rose-900 uppercase">TALLA</p>
+            <p className="text-lg md:text-xl font-black text-rose-700 mt-1">
+              {m.talla === 'TEspecial' ? 'TEsp' : m.talla || '-'}
+            </p>
+            {(m.talla === 'TEsp' || m.talla === 'TEspecial') && m.talla_especial_detalle && (
+              <p className="text-xs font-bold text-rose-800 mt-0.5 break-words">
+                ({m.talla_especial_detalle})
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-rose-200/80">
+          <h5 className="text-xs font-extrabold text-rose-900 uppercase mb-2">
+            Complementos Contratados
+          </h5>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+            <div className="bg-white border border-rose-200 p-2.5 rounded-xl flex justify-between items-center">
+              <span className="font-bold text-gray-700">Can Can:</span>
+              <span className="font-black text-rose-900">
+                {m.incluir_cancan ? `Incluido (${m.precio_cancan ?? 0} €)` : 'No incluido'}
+              </span>
+            </div>
+            <div className="bg-white border border-rose-200 p-2.5 rounded-xl flex justify-between items-center">
+              <span className="font-bold text-gray-700">Adorno Pelo:</span>
+              <span className="font-black text-rose-900">
+                {m.incluir_adorno_pelo ? `Incluido (${m.precio_adorno_pelo ?? 0} €)` : 'No incluido'}
+              </span>
+            </div>
+            <div className="bg-white border border-rose-200 p-2.5 rounded-xl flex justify-between items-center">
+              <span className="font-bold text-gray-700">Conjunto Interior:</span>
+              <span className="font-black text-rose-900">
+                {m.incluir_conjunto_interior ? `Incluido (${m.precio_conjunto_interior ?? 0} €)` : 'No incluido'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const guardarTalonRapido = async (val: string) => {
@@ -384,9 +862,17 @@ export function VistaPedidos() {
       const cargosActuales = Array.isArray(med.cargosExtra) ? med.cargosExtra : [];
       const nuevosCargos = [...cargosActuales, { concepto: nuevoCargoConcepto.trim(), precio: precioNum.toString() }];
 
-      const pTraje = parseFloat(med.precioTraje) || Number(pedidoSeleccionado.precio_total);
+      const isNovadrima = (pedidoSeleccionado.fabricante || '').trim().toLowerCase() === 'novadrima';
+      const isComunionNina = isComunionNinaRosilloAnavig(pedidoSeleccionado.categoria, pedidoSeleccionado.fabricante);
+      const pCorbata = (isNovadrima && med.incluir_corbata) ? (parseFloat(med.precio_corbata) || 0) : 0;
+      const pCancan = (isComunionNina && med.incluir_cancan) ? (parseFloat(med.precio_cancan) || 0) : 0;
+      const pAdornoPelo = (isComunionNina && med.incluir_adorno_pelo) ? (parseFloat(med.precio_adorno_pelo) || 0) : 0;
+      const pConjunto = ((isNovadrima || isComunionNina) && med.incluir_conjunto_interior) ? (parseFloat(med.precio_conjunto_interior) || 0) : 0;
+      const cComp = pCorbata + pCancan + pAdornoPelo + pConjunto;
+
+      const pTraje = parseFloat(med.precioTraje) || 0;
       const sumaExtras = nuevosCargos.reduce((acc: number, c: any) => acc + (parseFloat(c.precio) || 0), 0);
-      const nuevoPrecioTotal = pTraje + sumaExtras;
+      const nuevoPrecioTotal = pTraje + cComp + sumaExtras;
 
       const nuevasMedidas = {
         ...med,
@@ -424,9 +910,17 @@ export function VistaPedidos() {
     const cargosActuales = Array.isArray(med.cargosExtra) ? med.cargosExtra : [];
     const nuevosCargos = cargosActuales.filter((_: any, i: number) => i !== idx);
 
-    const pTraje = parseFloat(med.precioTraje) || Number(pedidoSeleccionado.precio_total);
+    const isNovadrima = (pedidoSeleccionado.fabricante || '').trim().toLowerCase() === 'novadrima';
+    const isComunionNina = isComunionNinaRosilloAnavig(pedidoSeleccionado.categoria, pedidoSeleccionado.fabricante);
+    const pCorbata = (isNovadrima && med.incluir_corbata) ? (parseFloat(med.precio_corbata) || 0) : 0;
+    const pCancan = (isComunionNina && med.incluir_cancan) ? (parseFloat(med.precio_cancan) || 0) : 0;
+    const pAdornoPelo = (isComunionNina && med.incluir_adorno_pelo) ? (parseFloat(med.precio_adorno_pelo) || 0) : 0;
+    const pConjunto = ((isNovadrima || isComunionNina) && med.incluir_conjunto_interior) ? (parseFloat(med.precio_conjunto_interior) || 0) : 0;
+    const cComp = pCorbata + pCancan + pAdornoPelo + pConjunto;
+
+    const pTraje = parseFloat(med.precioTraje) || 0;
     const sumaExtras = nuevosCargos.reduce((acc: number, c: any) => acc + (parseFloat(c.precio) || 0), 0);
-    const nuevoPrecioTotal = pTraje + sumaExtras;
+    const nuevoPrecioTotal = pTraje + cComp + sumaExtras;
 
     const nuevasMedidas = { ...med, cargosExtra: nuevosCargos };
 
@@ -446,7 +940,47 @@ export function VistaPedidos() {
   const handleAdelante = () => { if (paso === 1 && clienteSeleccionado) setPaso(2); else if (paso === 2 && pedidoSeleccionado) setPaso(3); };
   
   const totalPagado = pagos.reduce((acc, p) => acc + Number(p.monto_entrega_cuenta), 0);
-  const totalPrecioCalculado = isEditing ? ((parseFloat(editForm.precioTraje) || 0) + editForm.cargosExtra.reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0)) : (pedidoSeleccionado ? Number(pedidoSeleccionado.precio_total) : 0);
+
+  const getComplementosPrecios = () => {
+    if (isEditing) {
+      const isNovadrima = (editForm.fabricante || '').trim().toLowerCase() === 'novadrima';
+      const isComunionNina = isComunionNinaRosilloAnavig(pedidoSeleccionado?.categoria, editForm.fabricante);
+      const corbata = (isNovadrima && editForm.incluirCorbata) ? (parseFloat(editForm.precioCorbata) || 0) : 0;
+      const cancan = (isComunionNina && editForm.incluirCancan) ? (parseFloat(editForm.precioCancan) || 0) : 0;
+      const adornoPelo = (isComunionNina && editForm.incluirAdornoPelo) ? (parseFloat(editForm.precioAdornoPelo) || 0) : 0;
+      const conjunto = ((isNovadrima || isComunionNina) && editForm.incluirConjuntoInterior) ? (parseFloat(editForm.precioConjuntoInterior) || 0) : 0;
+      return { corbata, cancan, adornoPelo, conjunto };
+    } else {
+      const m = pedidoSeleccionado?.medidas || {};
+      const isNovadrima = (pedidoSeleccionado?.fabricante || '').trim().toLowerCase() === 'novadrima';
+      const isComunionNina = isComunionNinaRosilloAnavig(pedidoSeleccionado?.categoria, pedidoSeleccionado?.fabricante);
+      const corbata = (isNovadrima && m.incluir_corbata) ? (parseFloat(m.precio_corbata) || 0) : 0;
+      const cancan = (isComunionNina && m.incluir_cancan) ? (parseFloat(m.precio_cancan) || 0) : 0;
+      const adornoPelo = (isComunionNina && m.incluir_adorno_pelo) ? (parseFloat(m.precio_adorno_pelo) || 0) : 0;
+      const conjunto = ((isNovadrima || isComunionNina) && m.incluir_conjunto_interior) ? (parseFloat(m.precio_conjunto_interior) || 0) : 0;
+      return { corbata, cancan, adornoPelo, conjunto };
+    }
+  };
+
+  const compPrecios = getComplementosPrecios();
+  const sumaComp = compPrecios.corbata + compPrecios.cancan + compPrecios.adornoPelo + compPrecios.conjunto;
+
+  const mHasPrecioTraje = pedidoSeleccionado?.medidas?.precioTraje !== undefined && pedidoSeleccionado?.medidas?.precioTraje !== '';
+
+  const precioTrajeBase = isEditing
+    ? (parseFloat(editForm.precioTraje) || 0)
+    : (mHasPrecioTraje
+        ? (parseFloat(pedidoSeleccionado?.medidas?.precioTraje) || 0)
+        : Number(pedidoSeleccionado?.precio_total || 0) - sumaComp - (Array.isArray(pedidoSeleccionado?.medidas?.cargosExtra) ? pedidoSeleccionado.medidas.cargosExtra.reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0) : 0));
+
+  const sumaCargosExtra = isEditing
+    ? editForm.cargosExtra.reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0)
+    : (Array.isArray(pedidoSeleccionado?.medidas?.cargosExtra) ? pedidoSeleccionado.medidas.cargosExtra.reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0) : 0);
+
+  const totalPrecioCalculado = isEditing
+    ? (precioTrajeBase + sumaComp + sumaCargosExtra)
+    : (pedidoSeleccionado ? (mHasPrecioTraje ? (precioTrajeBase + sumaComp + sumaCargosExtra) : Number(pedidoSeleccionado.precio_total)) : 0);
+
   const restante = pedidoSeleccionado ? totalPrecioCalculado - totalPagado : 0;
 
   const getDesc = (p: Pedido | null) => {
@@ -512,6 +1046,63 @@ export function VistaPedidos() {
     if (!v || !p) return null;
     const fab = p.fabricante || '';
     const tipo = p.medidas?.tipo_articulo || (p.detalles_tejido?.includes('[NINA]') ? 'NINA' : 'SENORA');
+
+    if (p.categoria === 'COMUNION' && fab.includes('Novadrima')) {
+      if (medida === 'pecho') {
+        for (const row of TALLAS_NOVADRIMA_NINO) {
+          if (v <= row.pecho) return `T${row.talla}`;
+        }
+        return 'TEsp';
+      } else if (medida === 'cintura') {
+        for (const row of TALLAS_NOVADRIMA_NINO) {
+          if (v <= row.cintura_max) return `T${row.talla}`;
+        }
+        return 'TEsp';
+      }
+    }
+
+    if (p.categoria === 'COMUNION' && fab.includes('Ana Rosillo')) {
+      if (medida === 'pecho') {
+        for (const row of TALLAS_ANA_ROSILLO_NINA) {
+          if (v <= row.pecho) return `T${row.talla}`;
+        }
+        return 'TEsp';
+      } else if (medida === 'cintura') {
+        for (const row of TALLAS_ANA_ROSILLO_NINA) {
+          if (v <= row.cintura) return `T${row.talla}`;
+        }
+        return 'TEsp';
+      } else if (medida === 'largo_total') {
+        for (const row of TALLAS_ANA_ROSILLO_NINA) {
+          if (v <= row.largo) return `T${row.talla}`;
+        }
+        return 'TEsp';
+      }
+    }
+
+    if (p.categoria === 'COMUNION' && fab.includes('Anavig')) {
+      if (medida === 'pecho') {
+        for (const row of TALLAS_ANAVIG_NINA) {
+          if (v <= row.pecho) return `T${row.talla}`;
+        }
+        return 'TEsp';
+      } else if (medida === 'cintura') {
+        for (const row of TALLAS_ANAVIG_NINA) {
+          if (v <= row.cintura) return `T${row.talla}`;
+        }
+        return 'TEsp';
+      } else if (medida === 'talle') {
+        for (const row of TALLAS_ANAVIG_NINA) {
+          if (v <= row.talle) return `T${row.talla}`;
+        }
+        return 'TEsp';
+      } else if (medida === 'largo_total') {
+        for (const row of TALLAS_ANAVIG_NINA) {
+          if (v <= row.largo_total) return `T${row.talla}`;
+        }
+        return 'TEsp';
+      }
+    }
 
     if (fab.includes('Aires de Ferias') || fab.includes('Aires de Feria')) {
       if (tipo === 'SENORA') {
@@ -818,18 +1409,34 @@ export function VistaPedidos() {
                     </div>
                     <div className="flex items-center bg-amber-50 p-2 rounded-xl border border-amber-200 gap-1.5">
                       <span className="text-amber-900 font-extrabold">🏭 Fabricante:</span>
-                      <select className="bg-white p-1.5 border rounded-lg font-bold text-gray-800 outline-none" value={editForm.fabricante} onChange={e => setEditForm({...editForm, fabricante: e.target.value})}>
+                      <select className="bg-white p-1.5 border rounded-lg font-bold text-gray-800 outline-none" value={editForm.fabricante} onChange={e => handleFabricanteChangeVista(e.target.value)}>
                         <option value="">Sin especificar</option>
-                        <option value="Ana Barroso">Ana Barroso</option>
-                        <option value="Aires de Ferias">Aires de Ferias</option>
-                        <option value="Carmen Moda">Carmen Moda</option>
+                        {((FABRICANTES_POR_CATEGORIA[pedidoSeleccionado.categoria] || FABRICANTES_POR_CATEGORIA.OTRO || [])).map(f => (
+                          <option key={f.id} value={f.nombre}>{f.nombre}</option>
+                        ))}
                         <option value="OTRO">Otro...</option>
                       </select>
-                      <select className="bg-white p-1.5 border border-amber-300 rounded-lg font-black text-amber-950 outline-none" value={editForm.tipo_articulo || 'SENORA'} onChange={e => setEditForm({...editForm, tipo_articulo: e.target.value})}>
-                        <option value="SENORA">Señora</option>
-                        <option value="NINA">Niña</option>
-                      </select>
+                      {pedidoSeleccionado.categoria !== 'COMUNION' && (
+                        <select className="bg-white p-1.5 border border-amber-300 rounded-lg font-black text-amber-950 outline-none" value={editForm.tipo_articulo || 'SENORA'} onChange={e => setEditForm({...editForm, tipo_articulo: e.target.value})}>
+                          <option value="SENORA">Señora</option>
+                          <option value="NINA">Niña</option>
+                        </select>
+                      )}
                     </div>
+                    {(editForm.fabricante === 'Novadrima' || editForm.estilo_comunion) && (
+                      <div className="flex items-center bg-purple-50 p-2 rounded-xl border border-purple-200 gap-1.5">
+                        <span className="text-purple-900 font-extrabold">⚓ Estilo:</span>
+                        <select
+                          className="bg-white p-1.5 border border-purple-300 rounded-lg font-bold text-gray-800 outline-none"
+                          value={editForm.estilo_comunion || 'Calle'}
+                          onChange={e => setEditForm({...editForm, estilo_comunion: e.target.value as any})}
+                        >
+                          <option value="Calle">Calle</option>
+                          <option value="Marinero">Marinero</option>
+                          <option value="Almirante">Almirante</option>
+                        </select>
+                      </div>
+                    )}
                     <div className="flex items-center bg-blue-50 p-2 rounded-xl border border-blue-200">
                       <Ticket size={18} className="mr-1.5 text-blue-700 shrink-0" />
                       <span className="text-blue-900 mr-1.5 font-extrabold">Nº Talón:</span>
@@ -861,16 +1468,25 @@ export function VistaPedidos() {
                     </span>
                     <span className="inline-flex items-center gap-2 text-sm md:text-base font-bold px-3.5 py-1.5 bg-amber-100 text-amber-900 rounded-xl shadow-sm border border-amber-200 whitespace-nowrap">
                       <span>🏭 Fabricante: <strong className="text-base md:text-lg font-black text-amber-950">{pedidoSeleccionado.fabricante || 'Sin especificar'}</strong></span>
-                      <span className="text-amber-300 font-normal">|</span>
-                      <select
-                        className="bg-white text-xs md:text-sm font-extrabold text-amber-950 px-2 py-1 rounded-lg border border-amber-300 outline-none cursor-pointer shadow-inner shrink-0"
-                        value={pedidoSeleccionado.medidas?.tipo_articulo || (pedidoSeleccionado as any).tipo_articulo || 'SENORA'}
-                        onChange={e => guardarTipoRapido(e.target.value)}
-                      >
-                        <option value="SENORA">Señora</option>
-                        <option value="NINA">Niña</option>
-                      </select>
+                      {pedidoSeleccionado.categoria !== 'COMUNION' && (
+                        <>
+                          <span className="text-amber-300 font-normal">|</span>
+                          <select
+                            className="bg-white text-xs md:text-sm font-extrabold text-amber-950 px-2 py-1 rounded-lg border border-amber-300 outline-none cursor-pointer shadow-inner shrink-0"
+                            value={pedidoSeleccionado.medidas?.tipo_articulo || (pedidoSeleccionado as any).tipo_articulo || 'SENORA'}
+                            onChange={e => guardarTipoRapido(e.target.value)}
+                          >
+                            <option value="SENORA">Señora</option>
+                            <option value="NINA">Niña</option>
+                          </select>
+                        </>
+                      )}
                     </span>
+                    {(pedidoSeleccionado.fabricante === 'Novadrima' || pedidoSeleccionado.estilo_comunion) && (
+                      <span className="inline-flex items-center text-sm md:text-base font-bold px-3.5 py-1.5 bg-purple-100 text-purple-900 rounded-xl shadow-sm border border-purple-200 whitespace-nowrap">
+                        ⚓ Estilo: <strong className="ml-1.5 text-base md:text-lg font-black text-purple-950">{pedidoSeleccionado.estilo_comunion || 'Calle'}</strong>
+                      </span>
+                    )}
                     <span className="inline-flex items-center text-sm md:text-base font-bold px-3 py-1 bg-blue-50 text-blue-900 rounded-xl shadow-sm border-2 border-blue-200">
                       <Ticket size={18} className="mr-1.5 text-blue-700 shrink-0" />
                       <span className="text-blue-900 font-extrabold mr-1.5 whitespace-nowrap">Nº Talón:</span>
@@ -957,121 +1573,129 @@ export function VistaPedidos() {
               )}
             </div>
             
-            <div className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-2.5">
-              {['pecho', 'cintura', 'cadera', 'manga', 'talle', 'largo_total', 'contorno_brazo'].map((m: string) => {
-                const sug = getSugerenciaTallaVista(m, isEditing ? (editForm as any)[m] : pedidoSeleccionado.medidas?.[m], pedidoSeleccionado);
-                return (
-                  <div key={m} className="bg-gray-50 border border-gray-100 p-2.5 rounded-xl text-center flex flex-col items-center justify-between min-w-0">
-                    <p className="text-xs font-bold text-gray-500 uppercase w-full flex items-center justify-center gap-1 text-center">
-                      <span className="truncate">{m.replace('_', ' ')}</span>
-                      {sug && <span className="text-xs font-black text-blue-600 flex-shrink-0">(T{sug})</span>}
+            {(isEditing ? editForm.fabricante : pedidoSeleccionado.fabricante)?.trim().toLowerCase() === 'novadrima' ? (
+              isEditing ? renderVistaNovadrimaEdicion() : renderVistaNovadrimaLectura()
+            ) : isComunionNinaRosilloAnavig(pedidoSeleccionado.categoria, isEditing ? editForm.fabricante : pedidoSeleccionado.fabricante) ? (
+              isEditing ? renderVistaComunionNinaEdicion() : renderVistaComunionNinaLectura()
+            ) : (
+              <div className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-2.5">
+                {['pecho', 'cintura', 'cadera', 'manga', 'talle', 'largo_total', 'contorno_brazo'].map((m: string) => {
+                  const sug = getSugerenciaTallaVista(m, isEditing ? (editForm as any)[m] : pedidoSeleccionado.medidas?.[m], pedidoSeleccionado);
+                  return (
+                    <div key={m} className="bg-gray-50 border border-gray-100 p-2.5 rounded-xl text-center flex flex-col items-center justify-between min-w-0">
+                      <p className="text-xs font-bold text-gray-500 uppercase w-full flex items-center justify-center gap-1 text-center">
+                        <span className="truncate">{m.replace('_', ' ')}</span>
+                        {sug && <span className="text-xs font-black text-blue-600 flex-shrink-0">(T{sug})</span>}
+                      </p>
+                      {isEditing ? <input type="number" inputMode="decimal" className="w-full text-center mt-1 p-1 border rounded font-bold text-gray-800 outline-none focus:border-rose-300 text-lg" value={(editForm as any)[m]} onChange={e => setEditForm({...editForm, [m]: e.target.value})} /> : <p className="text-xl md:text-2xl font-black text-gray-800 mt-1">{pedidoSeleccionado.medidas?.[m] || '-'}</p>}
+                    </div>
+                  );
+                })}
+                
+                <div className="bg-rose-100/60 border border-rose-200 p-2.5 rounded-xl text-center flex flex-col items-center justify-between min-w-0">
+                  <p className="text-xs font-bold text-rose-800 uppercase w-full text-center">TALLA</p>
+                  {isEditing ? (
+                    <select className="w-full text-center mt-1 p-1 border rounded font-bold text-rose-900 bg-white outline-none focus:border-rose-400 text-xs md:text-sm" value={editForm.talla} onChange={e => setEditForm({...editForm, talla: e.target.value})}>
+                      <option value="">-</option>
+                      {editForm.tipo_articulo === 'NINA' ? (
+                        <>
+                          {['1','2','3','4','5','6','7','8','9','12','14','TEsp'].map(t => <option key={t} value={t}>{t === 'TEsp' ? 'TEsp' : `T${t}`}</option>)}
+                        </>
+                      ) : (
+                        <>
+                          {['32','34','36','38','40','42','44','46','48','50','52','54','56','58','60','TEsp'].map(t => <option key={t} value={t}>{t === 'TEsp' ? 'TEsp' : `T${t}`}</option>)}
+                        </>
+                      )}
+                    </select>
+                  ) : (
+                    <p className="text-xl md:text-2xl font-black text-rose-700 mt-1">
+                      {pedidoSeleccionado.medidas?.talla === 'TEspecial' ? 'TEsp' : pedidoSeleccionado.medidas?.talla || '-'}
                     </p>
-                    {isEditing ? <input type="number" inputMode="decimal" className="w-full text-center mt-1 p-1 border rounded font-bold text-gray-800 outline-none focus:border-rose-300 text-lg" value={(editForm as any)[m]} onChange={e => setEditForm({...editForm, [m]: e.target.value})} /> : <p className="text-xl md:text-2xl font-black text-gray-800 mt-1">{pedidoSeleccionado.medidas?.[m] || '-'}</p>}
-                  </div>
-                );
-              })}
-              
-              <div className="bg-rose-100/60 border border-rose-200 p-2.5 rounded-xl text-center flex flex-col items-center justify-between min-w-0">
-                <p className="text-xs font-bold text-rose-800 uppercase w-full text-center">TALLA</p>
-                {isEditing ? (
-                  <select className="w-full text-center mt-1 p-1 border rounded font-bold text-rose-900 bg-white outline-none focus:border-rose-400 text-xs md:text-sm" value={editForm.talla} onChange={e => setEditForm({...editForm, talla: e.target.value})}>
-                    <option value="">-</option>
-                    {editForm.tipo_articulo === 'NINA' ? (
-                      <>
-                        {['1','2','3','4','5','6','7','8','9','12','14','TEsp'].map(t => <option key={t} value={t}>{t === 'TEsp' ? 'TEsp' : `T${t}`}</option>)}
-                      </>
-                    ) : (
-                      <>
-                        {['32','34','36','38','40','42','44','46','48','50','52','54','56','58','60','TEsp'].map(t => <option key={t} value={t}>{t === 'TEsp' ? 'TEsp' : `T${t}`}</option>)}
-                      </>
-                    )}
-                  </select>
-                ) : (
-                  <p className="text-xl md:text-2xl font-black text-rose-700 mt-1">
-                    {pedidoSeleccionado.medidas?.talla === 'TEspecial' ? 'TEsp' : pedidoSeleccionado.medidas?.talla || '-'}
-                  </p>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Sección Tejidos */}
-            <div className="mt-4 bg-rose-50/50 p-4 sm:p-5 rounded-2xl border-2 border-rose-100 space-y-4">
-              <span className="text-sm md:text-base font-black text-rose-900 uppercase block tracking-wide">Tejidos y Detalle</span>
-              
-              {isEditing ? (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido del traje</label>
-                    <select
-                      className="w-full p-2 border border-rose-200 rounded-lg outline-none font-semibold bg-white"
-                      value={editForm.numTejidos}
-                      onChange={e => setEditForm({...editForm, numTejidos: Number(e.target.value)})}
-                    >
-                      <option value={1}>1 Tejido</option>
-                      <option value={2}>2 Tejidos</option>
-                      <option value={3}>3 Tejidos</option>
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {pedidoSeleccionado.categoria !== 'COMUNION' && (
+              <div className="mt-4 bg-rose-50/50 p-4 sm:p-5 rounded-2xl border-2 border-rose-100 space-y-4">
+                <span className="text-sm md:text-base font-black text-rose-900 uppercase block tracking-wide">Tejidos y Detalle</span>
+                
+                {isEditing ? (
+                  <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 1</label>
-                      <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejido1} onChange={e => setEditForm({...editForm, tejido1: e.target.value})} placeholder="Tejido 1..." />
+                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido del traje</label>
+                      <select
+                        className="w-full p-2 border border-rose-200 rounded-lg outline-none font-semibold bg-white"
+                        value={editForm.numTejidos}
+                        onChange={e => setEditForm({...editForm, numTejidos: Number(e.target.value)})}
+                      >
+                        <option value={1}>1 Tejido</option>
+                        <option value={2}>2 Tejidos</option>
+                        <option value={3}>3 Tejidos</option>
+                      </select>
                     </div>
-                    {editForm.numTejidos >= 2 && (
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 2</label>
-                        <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejido2} onChange={e => setEditForm({...editForm, tejido2: e.target.value})} placeholder="Tejido 2..." />
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 1</label>
+                        <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejido1} onChange={e => setEditForm({...editForm, tejido1: e.target.value})} placeholder="Tejido 1..." />
+                      </div>
+                      {editForm.numTejidos >= 2 && (
+                        <div>
+                          <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 2</label>
+                          <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejido2} onChange={e => setEditForm({...editForm, tejido2: e.target.value})} placeholder="Tejido 2..." />
+                        </div>
+                      )}
+                      {editForm.numTejidos >= 3 && (
+                        <div>
+                          <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 3</label>
+                          <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejido3} onChange={e => setEditForm({...editForm, tejido3: e.target.value})} placeholder="Tejido 3..." />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2 border-t border-rose-100">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido del Can Can</label>
+                        <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejidoCancan} onChange={e => setEditForm({...editForm, tejidoCancan: e.target.value})} placeholder="Can Can..." />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Color del Cordoncillo</label>
+                        <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.colorCordoncillo} onChange={e => setEditForm({...editForm, colorCordoncillo: e.target.value})} placeholder="Cordoncillo..." />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-base md:text-xl text-gray-900 font-medium">
+                    <div>
+                      <span className="font-extrabold text-rose-900">Tejido 1: </span>
+                      <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejido1 || '-'}</span>
+                    </div>
+                    {(pedidoSeleccionado.medidas?.numTejidos >= 2 || pedidoSeleccionado.medidas?.tejido2) && (
+                      <div>
+                        <span className="font-extrabold text-rose-900">Tejido 2: </span>
+                        <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejido2 || '-'}</span>
                       </div>
                     )}
-                    {editForm.numTejidos >= 3 && (
+                    {(pedidoSeleccionado.medidas?.numTejidos >= 3 || pedidoSeleccionado.medidas?.tejido3) && (
                       <div>
-                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 3</label>
-                        <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejido3} onChange={e => setEditForm({...editForm, tejido3: e.target.value})} placeholder="Tejido 3..." />
+                        <span className="font-extrabold text-rose-900">Tejido 3: </span>
+                        <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejido3 || '-'}</span>
                       </div>
                     )}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2 border-t border-rose-100">
                     <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido del Can Can</label>
-                      <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.tejidoCancan} onChange={e => setEditForm({...editForm, tejidoCancan: e.target.value})} placeholder="Can Can..." />
+                      <span className="font-extrabold text-rose-900">Tejido Can Can: </span>
+                      <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejidoCancan || '-'}</span>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Color del Cordoncillo</label>
-                      <input type="text" className="w-full p-2 border rounded-lg bg-white" value={editForm.colorCordoncillo} onChange={e => setEditForm({...editForm, colorCordoncillo: e.target.value})} placeholder="Cordoncillo..." />
+                      <span className="font-extrabold text-rose-900">Color Cordoncillo: </span>
+                      <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.colorCordoncillo || '-'}</span>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-base md:text-xl text-gray-900 font-medium">
-                  <div>
-                    <span className="font-extrabold text-rose-900">Tejido 1: </span>
-                    <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejido1 || '-'}</span>
-                  </div>
-                  {(pedidoSeleccionado.medidas?.numTejidos >= 2 || pedidoSeleccionado.medidas?.tejido2) && (
-                    <div>
-                      <span className="font-extrabold text-rose-900">Tejido 2: </span>
-                      <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejido2 || '-'}</span>
-                    </div>
-                  )}
-                  {(pedidoSeleccionado.medidas?.numTejidos >= 3 || pedidoSeleccionado.medidas?.tejido3) && (
-                    <div>
-                      <span className="font-extrabold text-rose-900">Tejido 3: </span>
-                      <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejido3 || '-'}</span>
-                    </div>
-                  )}
-                  <div>
-                    <span className="font-extrabold text-rose-900">Tejido Can Can: </span>
-                    <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.tejidoCancan || '-'}</span>
-                  </div>
-                  <div>
-                    <span className="font-extrabold text-rose-900">Color Cordoncillo: </span>
-                    <span className="font-black text-gray-900">{pedidoSeleccionado.medidas?.colorCordoncillo || '-'}</span>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {isEditing ? (
               <textarea className="mt-4 w-full p-3 border rounded-xl text-xl md:text-2xl font-normal text-gray-800 outline-none focus:border-rose-300 h-32" value={editForm.detalles_tejido} onChange={e => setEditForm({...editForm, detalles_tejido: e.target.value})} placeholder="Observaciones..."></textarea>
@@ -1116,13 +1740,44 @@ export function VistaPedidos() {
             ) : (
               <>
                 <div className="flex justify-between text-gray-700 items-center text-sm font-semibold gap-2">
-              <span>Precio Traje:</span>
-              {isEditing ? (
-                <input type="number" step="0.01" className="p-1 border-b-2 border-rose-300 bg-white rounded text-right font-bold text-gray-800 outline-none focus:border-rose-500 w-24" value={editForm.precioTraje} onChange={e => setEditForm({...editForm, precioTraje: e.target.value})} />
-              ) : (
-                <span className="font-bold text-gray-800 whitespace-nowrap">{Number(pedidoSeleccionado.medidas?.precioTraje !== undefined && pedidoSeleccionado.medidas?.precioTraje !== '' ? pedidoSeleccionado.medidas.precioTraje : pedidoSeleccionado.precio_total).toFixed(2)} €</span>
-              )}
-            </div>
+                  <span>Precio Traje Base:</span>
+                  {isEditing ? (
+                    <input type="number" step="0.01" className="p-1 border-b-2 border-rose-300 bg-white rounded text-right font-bold text-gray-800 outline-none focus:border-rose-500 w-24" value={editForm.precioTraje} onChange={e => setEditForm({...editForm, precioTraje: e.target.value})} />
+                  ) : (
+                    <span className="font-bold text-gray-800 whitespace-nowrap">{precioTrajeBase.toFixed(2)} €</span>
+                  )}
+                </div>
+
+                {/* Desglose de complementos seleccionados */}
+                {(compPrecios.corbata > 0 || compPrecios.cancan > 0 || compPrecios.adornoPelo > 0 || compPrecios.conjunto > 0) && (
+                  <div className="border-t border-rose-200 pt-2 space-y-1 text-xs sm:text-sm">
+                    <span className="text-xs font-bold text-rose-700 uppercase block mb-1">Complementos Seleccionados:</span>
+                    {compPrecios.corbata > 0 && (
+                      <div className="flex justify-between items-center text-gray-800 bg-white p-2 rounded-lg border border-rose-100">
+                        <span className="font-semibold">Corbata</span>
+                        <span className="font-bold text-rose-900">+{compPrecios.corbata.toFixed(2)} €</span>
+                      </div>
+                    )}
+                    {compPrecios.cancan > 0 && (
+                      <div className="flex justify-between items-center text-gray-800 bg-white p-2 rounded-lg border border-rose-100">
+                        <span className="font-semibold">Can Can</span>
+                        <span className="font-bold text-rose-900">+{compPrecios.cancan.toFixed(2)} €</span>
+                      </div>
+                    )}
+                    {compPrecios.adornoPelo > 0 && (
+                      <div className="flex justify-between items-center text-gray-800 bg-white p-2 rounded-lg border border-rose-100">
+                        <span className="font-semibold">Adorno Pelo</span>
+                        <span className="font-bold text-rose-900">+{compPrecios.adornoPelo.toFixed(2)} €</span>
+                      </div>
+                    )}
+                    {compPrecios.conjunto > 0 && (
+                      <div className="flex justify-between items-center text-gray-800 bg-white p-2 rounded-lg border border-rose-100">
+                        <span className="font-semibold">Conjunto Interior</span>
+                        <span className="font-bold text-rose-900">+{compPrecios.conjunto.toFixed(2)} €</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
             {/* Cargos Adicionales */}
             <div className="border-t border-rose-200 pt-2 space-y-2">
@@ -1165,7 +1820,7 @@ export function VistaPedidos() {
 
             <div className="flex justify-between text-gray-900 font-bold pt-2 border-t border-rose-200 items-center gap-2">
               <span className="text-xs sm:text-sm uppercase">Precio Total Pedido:</span>
-              <span className="text-base sm:text-lg whitespace-nowrap font-black">{isEditing ? ((parseFloat(editForm.precioTraje) || 0) + editForm.cargosExtra.reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0)).toFixed(2) : Number(pedidoSeleccionado.precio_total).toFixed(2)} €</span>
+              <span className="text-base sm:text-lg whitespace-nowrap font-black">{totalPrecioCalculado.toFixed(2)} €</span>
             </div>
             <div className="border-t border-rose-200 pt-3">
               <p className="text-xs font-bold text-rose-600 uppercase mb-2">Entregas a cuenta:</p>

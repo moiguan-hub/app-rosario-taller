@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, Ruler, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { TALLAS_NOVADRIMA_NINO, TALLAS_ANA_ROSILLO_NINA, TALLAS_ANAVIG_NINA } from '../constants/tallas';
 
 const TALLAS_DATA: Record<string, Record<string, Array<{t: string; p: number; c: number; ca: number; l?: number}>>> = {
   'Ana Barroso': {
@@ -61,7 +62,7 @@ const TALLAS_DATA: Record<string, Record<string, Array<{t: string; p: number; c:
 
 export function VistaTallas() {
   const [cat, setCat] = useState<'FLAMENCA' | 'COMUNION' | null>(null);
-  const [fab, setFab] = useState<'Ana Barroso' | 'Aires de Feria' | null>(null);
+  const [fab, setFab] = useState<string | null>(null);
   const [tipo, setTipo] = useState<'SENORA' | 'NINA' | null>(null);
 
   const back = () => tipo ? setTipo(null) : fab ? setFab(null) : setCat(null);
@@ -86,10 +87,30 @@ export function VistaTallas() {
             <Sparkles className="self-end opacity-80" size={32} />
             <div><span className="block text-2xl font-black">FLAMENCA</span><span className="text-rose-100 text-sm mt-1 block">Tablas por fabricante</span></div>
           </button>
-          <button disabled className="p-8 bg-gray-100 border-2 border-dashed border-gray-300 text-gray-400 rounded-2xl cursor-not-allowed text-left flex flex-col justify-between h-48">
-            <span className="bg-gray-200 text-gray-600 text-xs font-bold px-3 py-1 rounded-full self-end">Próximamente</span>
-            <div><span className="block text-2xl font-black">COMUNIÓN</span><span className="text-gray-400 text-sm mt-1 block">Próximamente</span></div>
+          <button onClick={() => setCat('COMUNION')} className="p-8 bg-gradient-to-br from-amber-500 to-amber-700 text-white rounded-2xl shadow-lg hover:shadow-xl text-left flex flex-col justify-between h-48 transition-transform hover:-translate-y-1">
+            <Sparkles className="self-end opacity-80" size={32} />
+            <div><span className="block text-2xl font-black">COMUNIÓN</span><span className="text-amber-100 text-sm mt-1 block">Tablas por fabricante</span></div>
           </button>
+        </div>
+      )}
+
+      {cat === 'COMUNION' && !fab && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-bold text-gray-700">Selecciona Fabricante:</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <button onClick={() => setFab('Novadrima')} className="p-8 bg-white border-2 border-amber-100 hover:border-amber-500 rounded-2xl shadow-md text-left flex flex-col justify-between h-40 transition-transform hover:-translate-y-1">
+              <span className="text-xs font-bold text-amber-600 uppercase">Comunión Niño</span>
+              <span className="text-2xl font-black text-gray-800">Novadrima (Comunión Niño)</span>
+            </button>
+            <button onClick={() => setFab('Ana Rosillo')} className="p-8 bg-white border-2 border-amber-100 hover:border-amber-500 rounded-2xl shadow-md text-left flex flex-col justify-between h-40 transition-transform hover:-translate-y-1">
+              <span className="text-xs font-bold text-amber-600 uppercase">Comunión Niña</span>
+              <span className="text-2xl font-black text-gray-800">Ana Rosillo (Comunión Niña)</span>
+            </button>
+            <button onClick={() => setFab('Anavig')} className="p-8 bg-white border-2 border-amber-100 hover:border-amber-500 rounded-2xl shadow-md text-left flex flex-col justify-between h-40 transition-transform hover:-translate-y-1">
+              <span className="text-xs font-bold text-amber-600 uppercase">Comunión Niña</span>
+              <span className="text-2xl font-black text-gray-800">Anavig (Comunión Niña)</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -137,17 +158,131 @@ export function VistaTallas() {
                   <th className="py-2 px-1 sm:px-3">Pecho</th>
                   <th className="py-2 px-1 sm:px-3">Cintura</th>
                   <th className="py-2 px-1 sm:px-3">Cadera</th>
-                  {'l' in (TALLAS_DATA[fab][tipo][0] || {}) && <th className="py-2 px-1 sm:px-3">Largo</th>}
+                  {'l' in (TALLAS_DATA[fab]?.[tipo]?.[0] || {}) && <th className="py-2 px-1 sm:px-3">Largo</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-800 text-xs sm:text-base">
-                {TALLAS_DATA[fab][tipo].map((row) => (
+                {TALLAS_DATA[fab]?.[tipo]?.map((row) => (
                   <tr key={row.t} className="hover:bg-rose-50 transition-colors">
                     <td className="py-2 px-1 sm:px-3 text-left font-black text-rose-600 text-base sm:text-lg">{row.t}</td>
                     <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.p}</td>
                     <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.c}</td>
                     <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.ca}</td>
                     {row.l !== undefined && <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.l}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {cat === 'COMUNION' && fab === 'Novadrima' && (
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-3 sm:p-6 space-y-4 sm:space-y-6">
+          <div className="border-b pb-3 flex justify-between items-center gap-2">
+            <div>
+              <span className="text-[10px] sm:text-xs font-bold text-amber-600 uppercase tracking-wider">Tabla de Medidas (Comunión Niño)</span>
+              <h3 className="text-lg sm:text-2xl font-black text-gray-800">Novadrima (Comunión Niño)</h3>
+            </div>
+            <span className="bg-amber-100 text-amber-800 text-[10px] sm:text-xs font-bold px-2 py-0.5 sm:px-3 sm:py-1 rounded-full whitespace-nowrap shrink-0">Medidas en cm</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-center border-collapse">
+              <thead>
+                <tr className="bg-gray-50 text-gray-700 text-xs sm:text-sm font-bold border-b border-gray-200">
+                  <th className="py-2 px-1 sm:px-3 text-left">Talla</th>
+                  <th className="py-2 px-1 sm:px-3">Edad</th>
+                  <th className="py-2 px-1 sm:px-3">Pecho</th>
+                  <th className="py-2 px-1 sm:px-3">Manga</th>
+                  <th className="py-2 px-1 sm:px-3">Cintura</th>
+                  <th className="py-2 px-1 sm:px-3">Largo Pantalón</th>
+                  <th className="py-2 px-1 sm:px-3">Cadera</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-gray-800 text-xs sm:text-base">
+                {TALLAS_NOVADRIMA_NINO.map((row) => (
+                  <tr key={row.talla} className="hover:bg-amber-50 transition-colors">
+                    <td className="py-2 px-1 sm:px-3 text-left font-black text-amber-600 text-base sm:text-lg">T{row.talla}</td>
+                    <td className="py-2 px-1 sm:px-3 font-medium text-gray-600">{row.edad}</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.pecho} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.manga} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.cintura_min} - {row.cintura_max} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.largo_pantalon} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.cadera ? `${row.cadera} cm` : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {cat === 'COMUNION' && fab === 'Ana Rosillo' && (
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-3 sm:p-6 space-y-4 sm:space-y-6">
+          <div className="border-b pb-3 flex justify-between items-center gap-2">
+            <div>
+              <span className="text-[10px] sm:text-xs font-bold text-amber-600 uppercase tracking-wider">Tabla de Medidas (Comunión Niña)</span>
+              <h3 className="text-lg sm:text-2xl font-black text-gray-800">Ana Rosillo (Comunión Niña)</h3>
+            </div>
+            <span className="bg-amber-100 text-amber-800 text-[10px] sm:text-xs font-bold px-2 py-0.5 sm:px-3 sm:py-1 rounded-full whitespace-nowrap shrink-0">Medidas en cm</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-center border-collapse">
+              <thead>
+                <tr className="bg-gray-50 text-gray-700 text-xs sm:text-sm font-bold border-b border-gray-200">
+                  <th className="py-2 px-1 sm:px-3 text-left">Talla</th>
+                  <th className="py-2 px-1 sm:px-3">Pecho</th>
+                  <th className="py-2 px-1 sm:px-3">Cintura</th>
+                  <th className="py-2 px-1 sm:px-3">Largo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-gray-800 text-xs sm:text-base">
+                {TALLAS_ANA_ROSILLO_NINA.map((row) => (
+                  <tr key={row.talla} className="hover:bg-amber-50 transition-colors">
+                    <td className="py-2 px-1 sm:px-3 text-left font-black text-amber-600 text-base sm:text-lg">T{row.talla}</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.pecho} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.cintura} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.largo} cm</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {cat === 'COMUNION' && fab === 'Anavig' && (
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-3 sm:p-6 space-y-4 sm:space-y-6">
+          <div className="border-b pb-3 flex justify-between items-center gap-2">
+            <div>
+              <span className="text-[10px] sm:text-xs font-bold text-amber-600 uppercase tracking-wider">Tabla de Medidas (Comunión Niña)</span>
+              <h3 className="text-lg sm:text-2xl font-black text-gray-800">Anavig (Comunión Niña)</h3>
+            </div>
+            <span className="bg-amber-100 text-amber-800 text-[10px] sm:text-xs font-bold px-2 py-0.5 sm:px-3 sm:py-1 rounded-full whitespace-nowrap shrink-0">Medidas en cm</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-center border-collapse">
+              <thead>
+                <tr className="bg-gray-50 text-gray-700 text-xs sm:text-sm font-bold border-b border-gray-200">
+                  <th className="py-2 px-1 sm:px-3 text-left">Talla</th>
+                  <th className="py-2 px-1 sm:px-3">Espalda</th>
+                  <th className="py-2 px-1 sm:px-3">Cuello</th>
+                  <th className="py-2 px-1 sm:px-3">Pecho</th>
+                  <th className="py-2 px-1 sm:px-3">Talle</th>
+                  <th className="py-2 px-1 sm:px-3">Cintura</th>
+                  <th className="py-2 px-1 sm:px-3">Largo Falda</th>
+                  <th className="py-2 px-1 sm:px-3">Largo Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-gray-800 text-xs sm:text-base">
+                {TALLAS_ANAVIG_NINA.map((row) => (
+                  <tr key={row.talla} className="hover:bg-amber-50 transition-colors">
+                    <td className="py-2 px-1 sm:px-3 text-left font-black text-amber-600 text-base sm:text-lg">T{row.talla}</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.espalda} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.cuello} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.pecho} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.talle} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.cintura} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.largo_falda} cm</td>
+                    <td className="py-2 px-1 sm:px-3 font-bold text-base sm:text-lg text-gray-800">{row.largo_total} cm</td>
                   </tr>
                 ))}
               </tbody>

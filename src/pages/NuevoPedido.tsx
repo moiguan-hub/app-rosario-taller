@@ -3,6 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Cliente, CategoriaPedido } from '../types/database.types';
+import { FABRICANTES_POR_CATEGORIA } from '../constants/fabricantes';
+import { TALLAS_NOVADRIMA_NINO, TALLAS_ANA_ROSILLO_NINA, TALLAS_ANAVIG_NINA } from '../constants/tallas';
+
+const isComunionNinaRosilloAnavig = (categoria?: string | null, fabricante?: string | null) => {
+  const cat = (categoria || '').toUpperCase();
+  if (cat !== 'COMUNION') return false;
+  const fab = (fabricante || '').toLowerCase();
+  return fab.includes('anavig') || fab.includes('ana rosillo') || fab.includes('lola rosillo') || fab.includes('rosillo');
+};
 
 export function NuevoPedido() {
   const navigate = useNavigate();
@@ -18,13 +27,33 @@ export function NuevoPedido() {
   const [nuevoCliente, setNuevoCliente] = useState({ apellidos: '', nombre: '', telefono: '', telefono2: '', contacto2: '', direccion: '' });
   const [pedidosActivosCliente, setPedidosActivosCliente] = useState<any[]>([]);
   const [pedidoPrincipalId, setPedidoPrincipalId] = useState<string>('');
+
+  const getInitialCategoria = (): CategoriaPedido => {
+    const c = localStorage.getItem('campana_activa') || 'FLAMENCA';
+    return (c === 'COMUNION' || c === 'Comunión' || c === 'COMUNIÓN') ? 'COMUNION' : 'FLAMENCA';
+  };
+
   const [pedido, setPedido] = useState({
     descripcion: '',
-    categoria: 'FLAMENCA' as CategoriaPedido,
-    tipo_articulo: 'SENORA' as 'NINA' | 'SENORA' | null,
+    categoria: getInitialCategoria(),
+    tipo_articulo: (getInitialCategoria() === 'COMUNION' ? 'NINA' : 'SENORA') as 'NINA' | 'SENORA' | 'NINO' | null,
+    estilo_comunion: 'Calle' as 'Calle' | 'Marinero' | 'Almirante' | null,
     fecha_pedido: new Date().toISOString().split('T')[0],
     fabricante: '', 
-    pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', talla: '',
+    pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', espalda: '', talla: '', talla_especial_detalle: '',
+    chaqueta: '', chaquetaOrigen: 'fabrica' as 'fabrica' | 'tienda',
+    pantalon: '', pantalonOrigen: 'fabrica' as 'fabrica' | 'tienda',
+    chalequillo: '', chalequilloOrigen: 'fabrica' as 'fabrica' | 'tienda',
+    camisa: '', camisaOrigen: 'fabrica' as 'fabrica' | 'tienda',
+    camisaTEsp: '',
+    incluirCorbata: false,
+    precioCorbata: '0',
+    incluirCancan: false,
+    precioCancan: '0',
+    incluirAdornoPelo: false,
+    precioAdornoPelo: '0',
+    incluirConjuntoInterior: false,
+    precioConjuntoInterior: '0',
     numTejidos: 1,
     tejido1: '',
     tejido2: '',
@@ -36,6 +65,58 @@ export function NuevoPedido() {
     cargosExtra: [] as Array<{ concepto: string; precio: string }>,
     entrega_cuenta: ''
   });
+
+  const handleFabricanteChange = (fabNombre: string) => {
+    const fabList = FABRICANTES_POR_CATEGORIA[pedido.categoria] || [];
+    const fabObj = fabList.find(f => f.nombre === fabNombre || f.id === fabNombre);
+    let nuevoTipo = pedido.tipo_articulo;
+
+    if (pedido.categoria === 'COMUNION') {
+      const fabLower = (fabNombre || '').toLowerCase();
+      if (fabLower.includes('novadrima') || (fabObj && fabObj.genero === 'Nino')) {
+        nuevoTipo = 'NINO';
+      } else {
+        nuevoTipo = 'NINA';
+      }
+    }
+
+    setPedido(prev => ({
+      ...prev,
+      fabricante: fabNombre,
+      tipo_articulo: nuevoTipo,
+    }));
+  };
+
+  useEffect(() => {
+    const syncCampana = () => {
+      const campanaActiva = localStorage.getItem('campana_activa') || 'FLAMENCA';
+      const catNorm: CategoriaPedido = (campanaActiva === 'COMUNION' || campanaActiva === 'Comunión' || campanaActiva === 'COMUNIÓN')
+        ? 'COMUNION'
+        : 'FLAMENCA';
+
+      setPedido(prev => {
+        if (prev.categoria !== catNorm) {
+          const defaultTipo = catNorm === 'COMUNION' ? 'NINA' : 'SENORA';
+          return {
+            ...prev,
+            categoria: catNorm,
+            fabricante: '',
+            tipo_articulo: defaultTipo
+          };
+        }
+        return prev;
+      });
+    };
+
+    syncCampana();
+    window.addEventListener('storage', syncCampana);
+    const interval = setInterval(syncCampana, 300);
+
+    return () => {
+      window.removeEventListener('storage', syncCampana);
+      clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     const sPaso = localStorage.getItem('paso');
@@ -175,30 +256,86 @@ export function NuevoPedido() {
         return;
       }
 
+      const esComunion = pedido.categoria === 'COMUNION';
+
       const tejidosList = [];
-      if (pedido.tejido1.trim()) tejidosList.push(`Tejido 1: ${pedido.tejido1.trim()}`);
-      if (pedido.numTejidos >= 2 && pedido.tejido2.trim()) tejidosList.push(`Tejido 2: ${pedido.tejido2.trim()}`);
-      if (pedido.numTejidos >= 3 && pedido.tejido3.trim()) tejidosList.push(`Tejido 3: ${pedido.tejido3.trim()}`);
-      if (pedido.tejidoCancan.trim()) tejidosList.push(`Tejido Can Can: ${pedido.tejidoCancan.trim()}`);
-      if (pedido.colorCordoncillo.trim()) tejidosList.push(`Color Cordoncillo: ${pedido.colorCordoncillo.trim()}`);
+      if (!esComunion) {
+        if (pedido.tejido1.trim()) tejidosList.push(`Tejido 1: ${pedido.tejido1.trim()}`);
+        if (pedido.numTejidos >= 2 && pedido.tejido2.trim()) tejidosList.push(`Tejido 2: ${pedido.tejido2.trim()}`);
+        if (pedido.numTejidos >= 3 && pedido.tejido3.trim()) tejidosList.push(`Tejido 3: ${pedido.tejido3.trim()}`);
+        if (pedido.tejidoCancan.trim()) tejidosList.push(`Tejido Can Can: ${pedido.tejidoCancan.trim()}`);
+        if (pedido.colorCordoncillo.trim()) tejidosList.push(`Color Cordoncillo: ${pedido.colorCordoncillo.trim()}`);
+      }
       const tejidosStr = tejidosList.join(' | ');
+
+      const isNovadrima = pedido.fabricante?.trim().toLowerCase() === 'novadrima';
+      const isComunionNina = isComunionNinaRosilloAnavig(pedido.categoria, pedido.fabricante);
+
+      let medidasPayload: any = {
+        modelo: pedido.descripcion,
+        tipo_articulo: pedido.categoria === 'FLAMENCA' ? pedido.tipo_articulo : null,
+        numTejidos: esComunion ? null : pedido.numTejidos,
+        tejido1: esComunion ? '' : pedido.tejido1,
+        tejido2: esComunion ? '' : pedido.tejido2,
+        tejido3: esComunion ? '' : pedido.tejido3,
+        tejidoCancan: esComunion ? '' : pedido.tejidoCancan,
+        colorCordoncillo: esComunion ? '' : pedido.colorCordoncillo,
+        observaciones: pedido.observaciones,
+        precioTraje: pedidoPrincipalId ? '0' : pedido.precioTraje,
+        cargosExtra: pedidoPrincipalId ? [] : pedido.cargosExtra
+      };
+
+      if (isNovadrima) {
+        medidasPayload = {
+          ...medidasPayload,
+          chaqueta: pedido.chaqueta,
+          chaqueta_origen: pedido.chaquetaOrigen || 'fabrica',
+          pantalon: pedido.pantalon,
+          pantalon_origen: pedido.pantalonOrigen || 'fabrica',
+          chalequillo: pedido.chalequillo,
+          chalequillo_origen: pedido.chalequilloOrigen || 'fabrica',
+          camisa: pedido.camisa,
+          camisa_origen: pedido.camisaOrigen || 'fabrica',
+          camisa_tesp: pedido.camisa === 'TEsp' ? pedido.camisaTEsp : '',
+          incluir_corbata: pedido.incluirCorbata,
+          precio_corbata: pedido.incluirCorbata ? Number(pedido.precioCorbata || 0) : 0,
+          incluir_conjunto_interior: pedido.incluirConjuntoInterior,
+          precio_conjunto_interior: pedido.incluirConjuntoInterior ? Number(pedido.precioConjuntoInterior || 0) : 0,
+        };
+      } else if (isComunionNina) {
+        medidasPayload = {
+          ...medidasPayload,
+          espalda: pedido.espalda,
+          pecho: pedido.pecho,
+          cintura: pedido.cintura,
+          talle: pedido.talle,
+          largo_total: pedido.largo_total,
+          contorno_brazo: pedido.contorno_brazo,
+          talla: pedido.talla,
+          talla_especial_detalle: pedido.talla === 'TEsp' ? pedido.talla_especial_detalle : '',
+          incluir_cancan: pedido.incluirCancan,
+          precio_cancan: pedido.incluirCancan ? Number(pedido.precioCancan || 0) : 0,
+          incluir_adorno_pelo: pedido.incluirAdornoPelo,
+          precio_adorno_pelo: pedido.incluirAdornoPelo ? Number(pedido.precioAdornoPelo || 0) : 0,
+          incluir_conjunto_interior: pedido.incluirConjuntoInterior,
+          precio_conjunto_interior: pedido.incluirConjuntoInterior ? Number(pedido.precioConjuntoInterior || 0) : 0,
+        };
+      } else {
+        medidasPayload = {
+          ...medidasPayload,
+          pecho: pedido.pecho, cintura: pedido.cintura, cadera: pedido.cadera,
+          manga: pedido.manga, talle: pedido.talle, largo_total: pedido.largo_total,
+          contorno_brazo: pedido.contorno_brazo, talla: pedido.talla,
+        };
+      }
 
       let insertData: any = {
         cliente_id: clientId,
         categoria: pedido.categoria,
         fabricante: pedido.fabricante,
+        estilo_comunion: isNovadrima ? pedido.estilo_comunion : null,
         fecha_pedido: pedido.fecha_pedido, 
-        medidas: {
-          modelo: pedido.descripcion,
-          tipo_articulo: pedido.categoria === 'FLAMENCA' ? pedido.tipo_articulo : null, pecho: pedido.pecho, cintura: pedido.cintura, cadera: pedido.cadera,
-          manga: pedido.manga, talle: pedido.talle, largo_total: pedido.largo_total,
-          contorno_brazo: pedido.contorno_brazo, talla: pedido.talla,
-          numTejidos: pedido.numTejidos, tejido1: pedido.tejido1, tejido2: pedido.tejido2, tejido3: pedido.tejido3,
-          tejidoCancan: pedido.tejidoCancan, colorCordoncillo: pedido.colorCordoncillo,
-          observaciones: pedido.observaciones,
-          precioTraje: pedidoPrincipalId ? '0' : pedido.precioTraje,
-          cargosExtra: pedidoPrincipalId ? [] : pedido.cargosExtra
-        },
+        medidas: medidasPayload,
         detalles_tejido: (pedido.categoria === 'FLAMENCA' ? '[' + pedido.tipo_articulo + '] ' : '') + (pedido.descripcion ? 'Modelo: ' + pedido.descripcion : '') + (tejidosStr ? ' | ' + tejidosStr : '') + (pedido.observaciones ? ' | ' + pedido.observaciones : ''), 
         precio_total: pedidoPrincipalId ? 0 : calcularPrecioTotal(),
         pedido_principal_id: pedidoPrincipalId || null
@@ -234,6 +371,63 @@ export function NuevoPedido() {
   const getSugerenciaTalla = (medida: string, valor: string) => {
     const v = parseFloat(valor) || 0;
     if (!v) return null;
+
+    if (pedido.categoria === 'COMUNION' && pedido.fabricante === 'Novadrima') {
+      if (medida === 'pecho') {
+        for (const row of TALLAS_NOVADRIMA_NINO) {
+          if (v <= row.pecho) return `T${row.talla}`;
+        }
+        return 'TEspecial';
+      } else if (medida === 'cintura') {
+        for (const row of TALLAS_NOVADRIMA_NINO) {
+          if (v <= row.cintura_max) return `T${row.talla}`;
+        }
+        return 'TEspecial';
+      }
+    }
+
+    if (pedido.categoria === 'COMUNION' && (pedido.fabricante === 'Ana Rosillo' || pedido.fabricante?.includes('Ana Rosillo'))) {
+      if (medida === 'pecho') {
+        for (const row of TALLAS_ANA_ROSILLO_NINA) {
+          if (v <= row.pecho) return `T${row.talla}`;
+        }
+        return 'TEspecial';
+      } else if (medida === 'cintura') {
+        for (const row of TALLAS_ANA_ROSILLO_NINA) {
+          if (v <= row.cintura) return `T${row.talla}`;
+        }
+        return 'TEspecial';
+      } else if (medida === 'largo_total') {
+        for (const row of TALLAS_ANA_ROSILLO_NINA) {
+          if (v <= row.largo) return `T${row.talla}`;
+        }
+        return 'TEspecial';
+      }
+    }
+
+    if (pedido.categoria === 'COMUNION' && (pedido.fabricante === 'Anavig' || pedido.fabricante?.includes('Anavig'))) {
+      if (medida === 'pecho') {
+        for (const row of TALLAS_ANAVIG_NINA) {
+          if (v <= row.pecho) return `T${row.talla}`;
+        }
+        return 'TEspecial';
+      } else if (medida === 'cintura') {
+        for (const row of TALLAS_ANAVIG_NINA) {
+          if (v <= row.cintura) return `T${row.talla}`;
+        }
+        return 'TEspecial';
+      } else if (medida === 'talle') {
+        for (const row of TALLAS_ANAVIG_NINA) {
+          if (v <= row.talle) return `T${row.talla}`;
+        }
+        return 'TEspecial';
+      } else if (medida === 'largo_total') {
+        for (const row of TALLAS_ANAVIG_NINA) {
+          if (v <= row.largo_total) return `T${row.talla}`;
+        }
+        return 'TEspecial';
+      }
+    }
 
     if (pedido.fabricante?.includes('Aires de Ferias') || pedido.fabricante?.includes('Aires de Feria')) {
       if (pedido.tipo_articulo === 'SENORA') {
@@ -325,10 +519,24 @@ export function NuevoPedido() {
     setPedido({
       descripcion: '',
       categoria: 'FLAMENCA' as CategoriaPedido,
-      tipo_articulo: 'SENORA' as 'NINA' | 'SENORA' | null,
+      tipo_articulo: 'SENORA' as 'NINA' | 'SENORA' | 'NINO' | null,
+      estilo_comunion: 'Calle' as 'Calle' | 'Marinero' | 'Almirante' | null,
       fecha_pedido: new Date().toISOString().split('T')[0],
       fabricante: '', 
-      pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', talla: '',
+      pecho: '', cintura: '', cadera: '', manga: '', talle: '', largo_total: '', contorno_brazo: '', espalda: '', talla: '', talla_especial_detalle: '',
+      chaqueta: '', chaquetaOrigen: 'fabrica' as 'fabrica' | 'tienda',
+      pantalon: '', pantalonOrigen: 'fabrica' as 'fabrica' | 'tienda',
+      chalequillo: '', chalequilloOrigen: 'fabrica' as 'fabrica' | 'tienda',
+      camisa: '', camisaOrigen: 'fabrica' as 'fabrica' | 'tienda',
+      camisaTEsp: '',
+      incluirCorbata: false,
+      precioCorbata: '0',
+      incluirCancan: false,
+      precioCancan: '0',
+      incluirAdornoPelo: false,
+      precioAdornoPelo: '0',
+      incluirConjuntoInterior: false,
+      precioConjuntoInterior: '0',
       numTejidos: 1,
       tejido1: '',
       tejido2: '',
@@ -345,7 +553,198 @@ export function NuevoPedido() {
     if (pedidoPrincipalId) return 0;
     const pTraje = parseFloat(pedido.precioTraje) || 0;
     const pExtra = pedido.cargosExtra.reduce((acc, curr) => acc + (parseFloat(curr.precio) || 0), 0);
-    return pTraje + pExtra;
+    const isNovadrima = pedido.fabricante?.trim().toLowerCase() === 'novadrima';
+    const pCorbata = (isNovadrima && pedido.incluirCorbata) ? (parseFloat(pedido.precioCorbata) || 0) : 0;
+    const isComunionNina = isComunionNinaRosilloAnavig(pedido.categoria, pedido.fabricante);
+    const pCancan = (isComunionNina && pedido.incluirCancan) ? (parseFloat(pedido.precioCancan) || 0) : 0;
+    const pAdornoPelo = (isComunionNina && pedido.incluirAdornoPelo) ? (parseFloat(pedido.precioAdornoPelo) || 0) : 0;
+    const pConjunto = ((isNovadrima || isComunionNina) && pedido.incluirConjuntoInterior) ? (parseFloat(pedido.precioConjuntoInterior) || 0) : 0;
+    return pTraje + pExtra + pCorbata + pCancan + pAdornoPelo + pConjunto;
+  };
+
+  const renderNovadrimaFields = () => {
+    const piezas = [
+      { label: 'Chaqueta', field: 'chaqueta', origenField: 'chaquetaOrigen', options: ['T6','T7','T8','T9','T10','T11','T12','T13','T14'] },
+      { label: 'Pantalón', field: 'pantalon', origenField: 'pantalonOrigen', options: ['T6','T7','T8','T9','T10','T11','T12','T13','T14'] },
+      { label: 'Chalequillo', field: 'chalequillo', origenField: 'chalequilloOrigen', options: ['T6','T7','T8','T9','T10','T11','T12','T13','T14'] },
+    ];
+    return (
+      <div className="bg-amber-50/60 p-4 rounded-xl border-2 border-amber-200 space-y-4">
+        <h3 className="text-sm font-extrabold text-amber-900 uppercase tracking-wide">Tallas y Piezas Novadrima</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          {piezas.map(p => (
+            <div key={p.field} className="bg-white p-3 rounded-lg border border-amber-200 flex flex-col justify-between space-y-2">
+              <div>
+                <label className="block text-xs font-bold text-amber-900 uppercase mb-1">{p.label}</label>
+                <select className="w-full p-2 border rounded-lg font-bold text-gray-800 bg-white text-sm outline-none" value={(pedido as any)[p.field]} onChange={e => setPedido({ ...pedido, [p.field]: e.target.value })}>
+                  <option value="">Seleccionar...</option>
+                  {p.options.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Origen / Estado</label>
+                <select className="w-full p-1.5 border rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 outline-none" value={(pedido as any)[p.origenField] || 'fabrica'} onChange={e => setPedido({ ...pedido, [p.origenField]: e.target.value })}>
+                  <option value="fabrica">🏭 Pedir a Fábrica</option>
+                  <option value="tienda">🏬 En Tienda</option>
+                </select>
+              </div>
+            </div>
+          ))}
+          <div className="bg-white p-3 rounded-lg border border-amber-200 flex flex-col justify-between space-y-2">
+            <div>
+              <label className="block text-xs font-bold text-amber-900 uppercase mb-1">Camisa</label>
+              <select className="w-full p-2 border rounded-lg font-bold text-gray-800 bg-white text-sm outline-none" value={pedido.camisa} onChange={e => setPedido({ ...pedido, camisa: e.target.value })}>
+                <option value="">Seleccionar...</option>
+                {['29','30','31','32','33','34','35','36','TEsp'].map(t => <option key={t} value={t}>{t === 'TEsp' ? 'TEsp' : `T${t}`}</option>)}
+              </select>
+              {pedido.camisa === 'TEsp' && (
+                <input type="text" placeholder="Especificación a mano..." className="w-full mt-2 p-2 border rounded-lg font-medium text-gray-800 bg-amber-50/50 text-xs outline-none" value={pedido.camisaTEsp} onChange={e => setPedido({ ...pedido, camisaTEsp: e.target.value })} />
+              )}
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Origen / Estado</label>
+              <select className="w-full p-1.5 border rounded-lg text-xs font-semibold bg-gray-50 text-gray-800 outline-none" value={pedido.camisaOrigen || 'fabrica'} onChange={e => setPedido({ ...pedido, camisaOrigen: e.target.value as any })}>
+                <option value="fabrica">🏭 Pedir a Fábrica</option>
+                <option value="tienda">🏬 En Tienda</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="pt-3 border-t border-amber-200/80 space-y-3">
+          <h4 className="text-xs font-extrabold text-amber-900 uppercase tracking-wide">Complementos Opcionales</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-white p-3 rounded-lg border border-amber-200 flex flex-col justify-between gap-2">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-gray-800">
+                <input type="checkbox" className="w-4 h-4 text-amber-600 rounded" checked={pedido.incluirCorbata} onChange={e => setPedido({ ...pedido, incluirCorbata: e.target.checked })} />
+                <span>Incluir Corbata</span>
+              </label>
+              {pedido.incluirCorbata && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-600">Precio (€):</span>
+                  <input type="number" step="0.01" className="w-28 p-1.5 border rounded-lg font-bold text-gray-800 bg-amber-50/50 text-right text-sm" value={pedido.precioCorbata} onChange={e => setPedido({ ...pedido, precioCorbata: e.target.value })} />
+                </div>
+              )}
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-amber-200 flex flex-col justify-between gap-2">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-gray-800">
+                <input type="checkbox" className="w-4 h-4 text-amber-600 rounded" checked={pedido.incluirConjuntoInterior} onChange={e => setPedido({ ...pedido, incluirConjuntoInterior: e.target.checked })} />
+                <span>Incluir Conjunto Interior</span>
+              </label>
+              {pedido.incluirConjuntoInterior && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-600">Precio (€):</span>
+                  <input type="number" step="0.01" className="w-28 p-1.5 border rounded-lg font-bold text-gray-800 bg-amber-50/50 text-right text-sm" value={pedido.precioConjuntoInterior} onChange={e => setPedido({ ...pedido, precioConjuntoInterior: e.target.value })} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderComunionNinaFields = () => {
+    const camposMedidas = [
+      { id: 'espalda', label: 'Espalda (cm)' },
+      { id: 'pecho', label: 'Pecho (cm)' },
+      { id: 'cintura', label: 'Cintura (cm)' },
+      { id: 'talle', label: 'Largo Talle (cm)' },
+      { id: 'largo_total', label: 'Largo Total (cm)' },
+      { id: 'contorno_brazo', label: 'Contorno Brazo (cm)' },
+    ];
+    const complementos = [
+      { id: 'Cancan', label: 'Can Can', flag: 'incluirCancan', price: 'precioCancan' },
+      { id: 'AdornoPelo', label: 'Adorno Pelo', flag: 'incluirAdornoPelo', price: 'precioAdornoPelo' },
+      { id: 'ConjuntoInterior', label: 'Conjunto Interior', flag: 'incluirConjuntoInterior', price: 'precioConjuntoInterior' },
+    ];
+
+    return (
+      <div className="bg-rose-50/60 p-4 rounded-xl border-2 border-rose-200 space-y-4">
+        <h3 className="text-sm font-extrabold text-rose-900 uppercase tracking-wide">
+          Medidas Vestido Comunión Niña
+        </h3>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {camposMedidas.map(campo => {
+            const val = (pedido as any)[campo.id];
+            const sug = getSugerenciaTalla(campo.id, val);
+            return (
+              <div key={campo.id} className="flex flex-col bg-white border border-rose-200 p-2.5 rounded-lg">
+                <label className="text-xs font-bold text-rose-900 uppercase mb-1">
+                  {campo.label} {sug && <span className="text-blue-500 ml-1">(Sugerida: {sug})</span>}
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  className="w-full p-1 border rounded-lg outline-none text-lg font-bold text-gray-800 focus:border-rose-400"
+                  value={val}
+                  onChange={e => setPedido({ ...pedido, [campo.id]: e.target.value })}
+                />
+              </div>
+            );
+          })}
+
+          <div className={`flex flex-col bg-white border border-rose-200 p-2.5 rounded-lg ${pedido.talla === 'TEsp' ? 'col-span-2 md:col-span-2' : ''}`}>
+            <label className="text-xs font-bold text-rose-900 uppercase mb-1">Talla Definitiva</label>
+            <div className="flex items-center gap-2">
+              <select
+                className="w-full p-1 border rounded-lg outline-none text-lg font-bold text-gray-800 bg-white focus:border-rose-400"
+                value={pedido.talla}
+                onChange={e => setPedido({ ...pedido, talla: e.target.value })}
+              >
+                <option value="">-</option>
+                {['100', '105', '110', '115', '120', '125', '130', '135', 'TEsp'].map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              {pedido.talla === 'TEsp' && (
+                <input
+                  type="text"
+                  placeholder="Escribir talla especial..."
+                  className="w-full p-1.5 border border-rose-300 rounded-lg outline-none text-sm font-bold text-gray-800 bg-white focus:border-rose-400"
+                  value={pedido.talla_especial_detalle || ''}
+                  onChange={e => setPedido({ ...pedido, talla_especial_detalle: e.target.value })}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-3 border-t border-rose-200/80 space-y-3">
+          <h4 className="text-xs font-extrabold text-rose-900 uppercase tracking-wide">Complementos Opcionales</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {complementos.map(c => {
+              const active = Boolean((pedido as any)[c.flag]);
+              return (
+                <div key={c.id} className="bg-white p-3 rounded-lg border border-rose-200 flex flex-col justify-between gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-gray-800">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 text-rose-600 rounded"
+                      checked={active}
+                      onChange={e => setPedido({ ...pedido, [c.flag]: e.target.checked })}
+                    />
+                    <span>{c.label}</span>
+                  </label>
+                  {active && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-gray-600">Precio (€):</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-24 p-1.5 border rounded-lg font-bold text-gray-800 bg-rose-50/50 text-right text-sm"
+                        value={(pedido as any)[c.price]}
+                        onChange={e => setPedido({ ...pedido, [c.price]: e.target.value })}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const handleAtras = () => {
@@ -457,17 +856,49 @@ export function NuevoPedido() {
                 <input type="text" placeholder="Escribe el modelo *" className="w-full p-3 outline-none font-bold text-gray-800" value={pedido.descripcion} onChange={e => setPedido({...pedido, descripcion: e.target.value})} required />
               </div>
             </div>
-            <select className="p-3 border-2 border-gray-100 rounded-xl outline-none" value={pedido.categoria} onChange={e => setPedido({...pedido, categoria: e.target.value as CategoriaPedido, fabricante: ''})}>
-              <option value="FLAMENCA">Traje de FLAMENCA</option><option value="COMUNION">Traje de COMUNIÓN</option><option value="OTRO">OTRO</option>
+            <select
+              className="p-3 border-2 border-gray-100 rounded-xl outline-none"
+              value={pedido.categoria}
+              onChange={e => {
+                const cat = e.target.value as CategoriaPedido;
+                const defaultTipo = cat === 'COMUNION' ? 'NINA' : 'SENORA';
+                setPedido({ ...pedido, categoria: cat, fabricante: '', tipo_articulo: defaultTipo });
+              }}
+            >
+              <option value="FLAMENCA">Traje de FLAMENCA</option>
+              <option value="COMUNION">Traje de COMUNIÓN</option>
+              <option value="OTRO">OTRO</option>
             </select>
             <input type="date" className="p-3 border-2 border-gray-100 rounded-xl outline-none" value={pedido.fecha_pedido} onChange={e => setPedido({...pedido, fecha_pedido: e.target.value})} />
           </div>
-          <select className="w-full mb-4 p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-rose-300 bg-white" value={pedido.fabricante} onChange={e => setPedido({...pedido, fabricante: e.target.value})} required>
+          <select
+            className="w-full mb-4 p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-rose-300 bg-white"
+            value={pedido.fabricante}
+            onChange={e => handleFabricanteChange(e.target.value)}
+            required
+          >
             <option value="" disabled>Selecciona Fabricante*</option>
-            {pedido.categoria === 'FLAMENCA' && ['Ana Barroso', 'Aires de Ferias', 'Carmen Moda'].map(f => <option key={f} value={f}>{f}</option>)}
-            {pedido.categoria === 'COMUNION' && ['Perla', 'Blanca', 'Angeles'].map(f => <option key={f} value={f}>{f}</option>)}
-            {pedido.categoria === 'OTRO' && <option value="Varios">Varios / Otros</option>}
+            {(FABRICANTES_POR_CATEGORIA[pedido.categoria] || FABRICANTES_POR_CATEGORIA.OTRO || []).map(f => (
+              <option key={f.id} value={f.nombre}>{f.nombre}</option>
+            ))}
           </select>
+
+          {pedido.fabricante === 'Novadrima' && (
+            <div className="mb-4 p-3 bg-amber-50 rounded-xl border-2 border-amber-200">
+              <label className="block text-xs font-bold text-amber-900 uppercase mb-1">
+                Estilo Comunión
+              </label>
+              <select
+                className="w-full p-3 border-2 border-amber-300 rounded-xl outline-none font-bold text-gray-800 bg-white"
+                value={pedido.estilo_comunion || 'Calle'}
+                onChange={e => setPedido({...pedido, estilo_comunion: e.target.value as any})}
+              >
+                <option value="Calle">Calle</option>
+                <option value="Marinero">Marinero</option>
+                <option value="Almirante">Almirante</option>
+              </select>
+            </div>
+          )}
 
           {pedido.categoria === 'FLAMENCA' && (
             <div className="flex gap-4 mb-4 p-3 bg-gray-50 rounded-xl border-2 border-gray-100 justify-center">
@@ -482,117 +913,125 @@ export function NuevoPedido() {
             </div>
           )}
           
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-rose-50/50 p-4 rounded-xl border border-rose-100">
-            {['pecho', 'cintura', 'cadera', 'manga', 'talle', 'largo_total', 'contorno_brazo'].map(medida => {
-              const sug = getSugerenciaTalla(medida, (pedido as any)[medida]);
-              return (
-                <div key={medida} className="flex flex-col bg-white border border-gray-100 p-2 rounded-lg">
-                  <label className="text-[10px] font-bold text-rose-600 uppercase mb-1">
-                    {medida.replace('_', ' ')} {sug && <span className="text-blue-500 ml-1">(Sugerida: {sug})</span>}
-                  </label>
-                  <input type="number" inputMode="decimal" className="w-full p-1 outline-none text-lg font-medium" value={(pedido as any)[medida]} onChange={e => setPedido({...pedido, [medida]: e.target.value})} />
-                </div>
-              );
-            })}
-            <div className="flex flex-col bg-white border border-gray-100 p-2 rounded-lg">
-              <label className="text-[10px] font-bold text-rose-600 uppercase mb-1">
-                TALLA DEFINITIVA
-              </label>
-              <select className="w-full p-1 outline-none text-lg font-medium bg-transparent" value={pedido.talla} onChange={e => setPedido({...pedido, talla: e.target.value})}>
-                <option value="">-</option>
-                {pedido.tipo_articulo === 'SENORA' ? (
-                  <>
-                    {['32','34','36','38','40','42','44','46','48','50','52','54','56','58','60','TEspecial'].map(t => (
-                      <option key={t} value={t}>T{t}</option>
-                    ))}
-                  </>
-                ) : (
-                  <>
-                    {['1','2','3','4','5','6','7','8','9','12','14','TEspecial'].map(t => (
-                      <option key={t} value={t}>T{t}</option>
-                    ))}
-                  </>
-                )}
-              </select>
+          {pedido.fabricante?.trim().toLowerCase() === 'novadrima' ? (
+            renderNovadrimaFields()
+          ) : isComunionNinaRosilloAnavig(pedido.categoria, pedido.fabricante) ? (
+            renderComunionNinaFields()
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-rose-50/50 p-4 rounded-xl border border-rose-100">
+              {['pecho', 'cintura', 'cadera', 'manga', 'talle', 'largo_total', 'contorno_brazo'].map(medida => {
+                const sug = getSugerenciaTalla(medida, (pedido as any)[medida]);
+                return (
+                  <div key={medida} className="flex flex-col bg-white border border-gray-100 p-2 rounded-lg">
+                    <label className="text-[10px] font-bold text-rose-600 uppercase mb-1">
+                      {medida.replace('_', ' ')} {sug && <span className="text-blue-500 ml-1">(Sugerida: {sug})</span>}
+                    </label>
+                    <input type="number" inputMode="decimal" className="w-full p-1 outline-none text-lg font-medium" value={(pedido as any)[medida]} onChange={e => setPedido({...pedido, [medida]: e.target.value})} />
+                  </div>
+                );
+              })}
+              <div className="flex flex-col bg-white border border-gray-100 p-2 rounded-lg">
+                <label className="text-[10px] font-bold text-rose-600 uppercase mb-1">
+                  TALLA DEFINITIVA
+                </label>
+                <select className="w-full p-1 outline-none text-lg font-medium bg-transparent" value={pedido.talla} onChange={e => setPedido({...pedido, talla: e.target.value})}>
+                  <option value="">-</option>
+                  {pedido.tipo_articulo === 'SENORA' ? (
+                    <>
+                      {['32','34','36','38','40','42','44','46','48','50','52','54','56','58','60','TEspecial'].map(t => (
+                        <option key={t} value={t}>T{t}</option>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      {['1','2','3','4','5','6','7','8','9','12','14','TEspecial'].map(t => (
+                        <option key={t} value={t}>T{t}</option>
+                      ))}
+                    </>
+                  )}
+                </select>
+              </div>
             </div>
-          </div>
+          )}
           
-          <div className="bg-rose-50/50 p-5 rounded-xl border-2 border-rose-100 space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-rose-800 uppercase mb-2">Tejido del traje</label>
-              <select
-                className="w-full p-3 border-2 border-rose-100 rounded-xl outline-none font-semibold bg-white focus:border-rose-300"
-                value={pedido.numTejidos}
-                onChange={e => setPedido({...pedido, numTejidos: Number(e.target.value)})}
-              >
-                <option value={1}>1 Tejido</option>
-                <option value={2}>2 Tejidos</option>
-                <option value={3}>3 Tejidos</option>
-              </select>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {pedido.categoria !== 'COMUNION' && (
+            <div className="bg-rose-50/50 p-5 rounded-xl border-2 border-rose-100 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 1</label>
-                <input
-                  type="text"
-                  placeholder="Tipo de tejido 1..."
-                  className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
-                  value={pedido.tejido1}
-                  onChange={e => setPedido({...pedido, tejido1: e.target.value})}
-                />
+                <label className="block text-xs font-bold text-rose-800 uppercase mb-2">Tejido del traje</label>
+                <select
+                  className="w-full p-3 border-2 border-rose-100 rounded-xl outline-none font-semibold bg-white focus:border-rose-300"
+                  value={pedido.numTejidos}
+                  onChange={e => setPedido({...pedido, numTejidos: Number(e.target.value)})}
+                >
+                  <option value={1}>1 Tejido</option>
+                  <option value={2}>2 Tejidos</option>
+                  <option value={3}>3 Tejidos</option>
+                </select>
               </div>
 
-              {pedido.numTejidos >= 2 && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 2</label>
+                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 1</label>
                   <input
                     type="text"
-                    placeholder="Tipo de tejido 2..."
+                    placeholder="Tipo de tejido 1..."
                     className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
-                    value={pedido.tejido2}
-                    onChange={e => setPedido({...pedido, tejido2: e.target.value})}
+                    value={pedido.tejido1}
+                    onChange={e => setPedido({...pedido, tejido1: e.target.value})}
                   />
                 </div>
-              )}
 
-              {pedido.numTejidos >= 3 && (
+                {pedido.numTejidos >= 2 && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 2</label>
+                    <input
+                      type="text"
+                      placeholder="Tipo de tejido 2..."
+                      className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
+                      value={pedido.tejido2}
+                      onChange={e => setPedido({...pedido, tejido2: e.target.value})}
+                    />
+                  </div>
+                )}
+
+                {pedido.numTejidos >= 3 && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 3</label>
+                    <input
+                      type="text"
+                      placeholder="Tipo de tejido 3..."
+                      className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
+                      value={pedido.tejido3}
+                      onChange={e => setPedido({...pedido, tejido3: e.target.value})}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-rose-100">
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido 3</label>
+                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido del Can Can</label>
                   <input
                     type="text"
-                    placeholder="Tipo de tejido 3..."
+                    placeholder="Tipo de tejido can can..."
                     className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
-                    value={pedido.tejido3}
-                    onChange={e => setPedido({...pedido, tejido3: e.target.value})}
+                    value={pedido.tejidoCancan}
+                    onChange={e => setPedido({...pedido, tejidoCancan: e.target.value})}
                   />
                 </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-rose-100">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Tejido del Can Can</label>
-                <input
-                  type="text"
-                  placeholder="Tipo de tejido can can..."
-                  className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
-                  value={pedido.tejidoCancan}
-                  onChange={e => setPedido({...pedido, tejidoCancan: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Color del Cordoncillo</label>
-                <input
-                  type="text"
-                  placeholder="Color del cordoncillo..."
-                  className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
-                  value={pedido.colorCordoncillo}
-                  onChange={e => setPedido({...pedido, colorCordoncillo: e.target.value})}
-                />
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Color del Cordoncillo</label>
+                  <input
+                    type="text"
+                    placeholder="Color del cordoncillo..."
+                    className="w-full p-3 border-2 border-gray-100 rounded-xl outline-none bg-white focus:border-rose-300"
+                    value={pedido.colorCordoncillo}
+                    onChange={e => setPedido({...pedido, colorCordoncillo: e.target.value})}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <textarea placeholder="Observaciones / Detalles..." className="w-full p-4 border-2 border-gray-100 rounded-xl h-24 outline-none" value={pedido.observaciones} onChange={e => setPedido({...pedido, observaciones: e.target.value})}></textarea>
           
@@ -650,6 +1089,49 @@ export function NuevoPedido() {
                 />
               </div>
             </div>
+
+            {/* Desglose de complementos seleccionados */}
+            {(() => {
+              const isNovadrima = pedido.fabricante?.trim().toLowerCase() === 'novadrima';
+              const isComunionNina = isComunionNinaRosilloAnavig(pedido.categoria, pedido.fabricante);
+              const corbataPrecio = (isNovadrima && pedido.incluirCorbata) ? (parseFloat(pedido.precioCorbata) || 0) : 0;
+              const cancanPrecio = (isComunionNina && pedido.incluirCancan) ? (parseFloat(pedido.precioCancan) || 0) : 0;
+              const adornoPeloPrecio = (isComunionNina && pedido.incluirAdornoPelo) ? (parseFloat(pedido.precioAdornoPelo) || 0) : 0;
+              const conjuntoPrecio = ((isNovadrima || isComunionNina) && pedido.incluirConjuntoInterior) ? (parseFloat(pedido.precioConjuntoInterior) || 0) : 0;
+              const hayComplementos = corbataPrecio > 0 || cancanPrecio > 0 || adornoPeloPrecio > 0 || conjuntoPrecio > 0;
+
+              if (pedidoPrincipalId || !hayComplementos) return null;
+
+              return (
+                <div className="pt-2 border-t border-gray-200 space-y-1.5">
+                  <span className="block text-xs font-bold text-gray-500 uppercase">Complementos Seleccionados:</span>
+                  {corbataPrecio > 0 && (
+                    <div className="flex justify-between items-center text-sm bg-amber-50/60 p-2 rounded-lg border border-amber-200">
+                      <span className="font-bold text-amber-900">Corbata</span>
+                      <span className="font-black text-amber-950">+{corbataPrecio.toFixed(2)} €</span>
+                    </div>
+                  )}
+                  {cancanPrecio > 0 && (
+                    <div className="flex justify-between items-center text-sm bg-rose-50/60 p-2 rounded-lg border border-rose-200">
+                      <span className="font-bold text-rose-900">Can Can</span>
+                      <span className="font-black text-rose-950">+{cancanPrecio.toFixed(2)} €</span>
+                    </div>
+                  )}
+                  {adornoPeloPrecio > 0 && (
+                    <div className="flex justify-between items-center text-sm bg-rose-50/60 p-2 rounded-lg border border-rose-200">
+                      <span className="font-bold text-rose-900">Adorno Pelo</span>
+                      <span className="font-black text-rose-950">+{adornoPeloPrecio.toFixed(2)} €</span>
+                    </div>
+                  )}
+                  {conjuntoPrecio > 0 && (
+                    <div className="flex justify-between items-center text-sm bg-amber-50/60 p-2 rounded-lg border border-amber-200">
+                      <span className="font-bold text-amber-900">Conjunto Interior</span>
+                      <span className="font-black text-amber-950">+{conjuntoPrecio.toFixed(2)} €</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Cargos Adicionales */}
             {!pedidoPrincipalId && (
