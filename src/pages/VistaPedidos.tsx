@@ -30,6 +30,7 @@ export function VistaPedidos() {
   const [editPagos, setEditPagos] = useState<{[key: string]: string}>({});
   const [modalContacto, setModalContacto] = useState<{ tipo: 'call' | 'wa', tel1: string, nom1: string, tel2: string, nom2: string } | null>(null);
   const [pedidoPrincipal, setPedidoPrincipal] = useState<Pedido | null>(null);
+  const [clienteExpandidoId, setClienteExpandidoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (pedidoSeleccionado?.pedido_principal_id) {
@@ -45,6 +46,16 @@ export function VistaPedidos() {
       setPedidoPrincipal(null);
     }
   }, [pedidoSeleccionado, pedidos]);
+
+  useEffect(() => {
+    if (pedidoSeleccionado?.cliente_id) {
+      if (pedidos.length === 0 || pedidos[0]?.cliente_id !== pedidoSeleccionado.cliente_id) {
+        supabase.from('pedidos').select('*').eq('cliente_id', pedidoSeleccionado.cliente_id).order('created_at', { ascending: false }).then(({ data }) => {
+          if (data) setPedidos(data as Pedido[]);
+        });
+      }
+    }
+  }, [pedidoSeleccionado?.cliente_id]);
 
   useEffect(() => {
     const loadPersisted = async () => {
@@ -216,10 +227,16 @@ export function VistaPedidos() {
     if (editForm.colorCordoncillo.trim()) tejidosList.push(`Color Cordoncillo: ${editForm.colorCordoncillo.trim()}`);
     const tejidosStr = tejidosList.join(' | ');
 
+    const pTraje = parseFloat(editForm.precioTraje) || 0;
+    const pExtras = (editForm.cargosExtra || []).reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0);
+    const upPrecio = pedidoSeleccionado.pedido_principal_id ? 0 : (pTraje + pExtras);
+
     const upMed = {
       ...pedidoSeleccionado.medidas,
       modelo: editForm.descripcion,
       tipo_articulo: editForm.tipo_articulo,
+      precioTraje: editForm.precioTraje,
+      cargosExtra: editForm.cargosExtra,
       pecho: editForm.pecho, cintura: editForm.cintura, cadera: editForm.cadera,
       manga: editForm.manga, talle: editForm.talle, largo_total: editForm.largo_total,
       contorno_brazo: editForm.contorno_brazo, talla: editForm.talla,
@@ -231,7 +248,6 @@ export function VistaPedidos() {
       colorCordoncillo: editForm.colorCordoncillo,
       observaciones: editForm.detalles_tejido
     };
-    const upPrecio = parseFloat(editForm.precio_total) || 0;
     const combinedDetalles = (editForm.tipo_articulo === 'SENORA' || editForm.tipo_articulo === 'NINA' ? '[' + editForm.tipo_articulo + '] ' : '') + (editForm.descripcion ? 'Modelo: ' + editForm.descripcion : '') + (tejidosStr ? ' | ' + tejidosStr : '') + (editForm.detalles_tejido ? ' | ' + editForm.detalles_tejido : '');
 
     const payload: any = {
@@ -301,6 +317,13 @@ export function VistaPedidos() {
       .from('pedidos')
       .update({ pedido_principal_id: nuevoId })
       .eq('id', pedidoSeleccionado.id);
+  };
+
+  const cambiarPedidoPestana = async (p: Pedido) => {
+    setPedidoSeleccionado(p);
+    setIsEditing(false);
+    const { data: payData } = await supabase.from('pagos').select('*').eq('pedido_id', p.id).order('fecha', { ascending: true });
+    setPagos(payData || []);
   };
 
   const eliminarPedido = async () => {
@@ -467,6 +490,23 @@ export function VistaPedidos() {
     const talon = (p.numero_talon || '').toLowerCase();
     return clienteInfo.includes(term) || desc.includes(term) || fab.includes(term) || cat.includes(term) || talon.includes(term);
   });
+
+  const clientesConPedidos = React.useMemo(() => {
+    const map = new Map<string, { cliente: Cliente | any; pedidos: Pedido[] }>();
+
+    pedidosFiltrados.forEach(p => {
+      const cId = p.cliente_id || p.clientes?.id || 'sin_id';
+      if (!map.has(cId)) {
+        map.set(cId, {
+          cliente: p.clientes || { id: cId, nombre: 'Cliente', apellidos: '' },
+          pedidos: []
+        });
+      }
+      map.get(cId)!.pedidos.push(p);
+    });
+
+    return Array.from(map.values());
+  }, [pedidosFiltrados]);
   const getSugerenciaTallaVista = (medida: string, valor: any, p: Pedido | null) => {
     const v = parseFloat(valor) || 0;
     if (!v || !p) return null;
@@ -625,33 +665,106 @@ export function VistaPedidos() {
           {todosLosPedidos.length > 0 && (
             <div className="mt-8 border-t border-gray-100 pt-6">
               <h3 className="font-bold text-gray-700 uppercase tracking-wide text-sm mb-4">
-                {busqueda.trim() ? `Pedidos encontrados (${pedidosFiltrados.length})` : `Todos los Pedidos (${todosLosPedidos.length})`}
+                {busqueda.trim() ? `Clientes con pedidos encontrados (${clientesConPedidos.length})` : `Todos los Pedidos (${todosLosPedidos.length})`}
               </h3>
-              {pedidosFiltrados.length === 0 ? (
+              {clientesConPedidos.length === 0 ? (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm font-medium text-center">⚠️ No se encontró ningún pedido con "{busqueda}".</div>
               ) : (
                 <div className="space-y-3">
-                  {pedidosFiltrados.map(p => (
-                    <div key={p.id} onClick={() => seleccionarPedidoDirecto(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-start bg-white shadow-sm">
-                      <FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} />
-                      <div className="flex-1 w-full min-w-0">
-                        <p className="font-bold text-gray-800 text-lg break-words">{capitalize(p.clientes?.apellidos)}, {capitalize(p.clientes?.nombre)}</p>
-                        <p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p>
-                        <p className="text-base text-gray-500 mt-1 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {p.estado_proceso === 'ENTREGADO' ? (
-                            <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">
-                              ENTREGADO
+                  {clientesConPedidos.map(({ cliente: c, pedidos: pList }) => {
+                    const cId = c.id || pList[0]?.cliente_id;
+                    const isExpanded = clienteExpandidoId === cId;
+                    const numPedidos = pList.length;
+
+                    return (
+                      <div key={cId} className="border-2 border-gray-100 rounded-2xl bg-white shadow-sm overflow-hidden transition-all">
+                        <div
+                          onClick={() => setClienteExpandidoId(isExpanded ? null : cId)}
+                          className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50/80 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 pr-2">
+                            <div className="bg-rose-50 p-2.5 rounded-full text-rose-500 shrink-0">
+                              <User size={22} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-gray-900 text-base md:text-lg truncate">
+                                {capitalize(c.apellidos)}, {capitalize(c.nombre)}
+                              </p>
+                              {c.telefono && (
+                                <p className="text-xs text-gray-500 truncate">
+                                  📞 {c.telefono} {c.telefono2 ? `| Tel 2: ${c.telefono2}` : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {numPedidos >= 2 ? (
+                              <span className="bg-purple-100 text-purple-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                                {numPedidos} Pedidos
+                              </span>
+                            ) : (
+                              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                                1 Pedido
+                              </span>
+                            )}
+                            <span className="text-gray-400 font-bold text-sm ml-1">
+                              {isExpanded ? '▲' : '▼'}
                             </span>
-                          ) : (
-                            <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                              {p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}
-                            </span>
-                          )}
+                          </div>
                         </div>
+
+                        {isExpanded && (
+                          <div className="bg-gray-50/50 p-3 border-t border-gray-100 space-y-2">
+                            {pList.map(p => (
+                              <div
+                                key={p.id}
+                                onClick={() => seleccionarPedidoDirecto(p)}
+                                className={`p-3 rounded-xl cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between shadow-xs transition-all gap-2 ${
+                                  !p.pedido_principal_id
+                                    ? 'border-2 border-amber-300 bg-amber-50/30'
+                                    : 'border border-gray-200 bg-white hover:border-rose-400'
+                                }`}
+                              >
+                                <div className="flex items-start gap-2.5 min-w-0">
+                                  <FileText className="text-rose-500 shrink-0 mt-0.5" size={20} />
+                                  <div className="min-w-0">
+                                    <p className="font-bold text-gray-900 text-sm md:text-base break-words">
+                                      {getDesc(p)}
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      {p.fecha_pedido ? `Pedido el ${p.fecha_pedido}` : ''} {p.fabricante ? `| Fabricante: ${p.fabricante}` : ''}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                  {p.estado_proceso === 'ENTREGADO' ? (
+                                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                                      ENTREGADO
+                                    </span>
+                                  ) : (
+                                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                      {p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}
+                                    </span>
+                                  )}
+                                  {!p.pedido_principal_id ? (
+                                    <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">
+                                      👑 Pedido Principal (Cobro Unificado)
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold px-2.5 py-1 rounded-full">
+                                      🔗 Vinculado a Pedido Principal
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -663,12 +776,44 @@ export function VistaPedidos() {
         <div className="space-y-6 animate-fadeIn">
           <div className="bg-gray-900 p-4 rounded-xl shadow-md text-white"><p className="text-xs text-gray-400 font-semibold uppercase mb-1">Cliente</p><p className="font-bold text-xl">{clienteSeleccionado.nombre} {clienteSeleccionado.apellidos}</p></div>
           <h3 className="font-bold text-gray-700 uppercase text-sm border-b pb-2">Historial ({pedidos.length})</h3>
-          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className="p-4 border-2 border-gray-100 rounded-xl hover:border-rose-300 cursor-pointer flex items-start bg-white shadow-sm"><FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} /><div className="flex-1 w-full min-w-0"><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p><p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p><div className="flex flex-wrap gap-2 mt-2">{p.estado_proceso === 'ENTREGADO' ? <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">ENTREGADO</span> : <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span>}{p.pedido_principal_id && <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-amber-100 text-amber-800 border border-amber-200">Cobro Vinculado</span>}</div></div></div>))}</div>
+          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className={`p-4 rounded-xl hover:border-rose-300 cursor-pointer flex items-start shadow-sm ${!p.pedido_principal_id ? 'border-2 border-amber-300 bg-amber-50/30' : 'border-2 border-gray-100 bg-white'}`}><FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} /><div className="flex-1 w-full min-w-0"><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p><p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p><div className="flex flex-wrap gap-2 mt-2">{p.estado_proceso === 'ENTREGADO' ? <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">ENTREGADO</span> : <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span>}{!p.pedido_principal_id ? <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">👑 Pedido Principal (Cobro Unificado)</span> : <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold px-2.5 py-1 rounded-full">🔗 Vinculado a Pedido Principal</span>}</div></div></div>))}</div>
         </div>
       )}
 
       {paso === 3 && pedidoSeleccionado && (
         <div className="space-y-6 animate-fadeIn">
+          {pedidos.length > 1 && (
+            <div className="bg-gray-100 p-2.5 rounded-2xl flex flex-wrap gap-2 border border-gray-200">
+              {pedidos.map((p) => {
+                const isSelected = p.id === pedidoSeleccionado.id;
+                const esVinculado = !!p.pedido_principal_id;
+                const titulo = getDesc(p) || p.categoria || 'Pedido';
+                const fecha = p.fecha_pedido || '';
+
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => cambiarPedidoPestana(p)}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-rose-600 text-white shadow-md'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+                    }`}
+                  >
+                    <span className="text-sm">{esVinculado ? '🔗' : '👑'}</span>
+                    <span>{titulo}</span>
+                    {fecha && (
+                      <span className={`text-xs ${isSelected ? 'text-rose-100' : 'text-gray-400'}`}>
+                        ({fecha})
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div className="border-b-2 border-gray-100 pb-4 flex flex-col md:flex-row justify-between items-start gap-4">
             <div className="w-full md:pr-4">
               {isEditing ? (
@@ -710,6 +855,15 @@ export function VistaPedidos() {
                 <>
                   <h3 className="text-2xl md:text-3xl font-black text-gray-900 break-words">{getDesc(pedidoSeleccionado)}</h3>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
+                    {!pedidoSeleccionado.pedido_principal_id ? (
+                      <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">
+                        👑 Pedido Principal (Cobro Unificado)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold px-2.5 py-1 rounded-full">
+                        🔗 Vinculado a Pedido Principal
+                      </span>
+                    )}
                     <span className="inline-flex items-center text-sm md:text-base font-bold px-3.5 py-1.5 bg-rose-100 text-rose-900 rounded-xl shadow-sm border border-rose-200">
                       📅 Pedido el: <strong className="ml-1.5 text-base md:text-lg font-black text-rose-950">{pedidoSeleccionado.fecha_pedido || 'Sin fecha'}</strong>
                     </span>
@@ -736,23 +890,23 @@ export function VistaPedidos() {
                         onChange={e => guardarTalonRapido(e.target.value)}
                       />
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold px-3 py-1.5 bg-purple-50 text-purple-900 rounded-xl shadow-sm border border-purple-200">
-                      <span className="text-purple-950 font-black whitespace-nowrap">Vincular pago a:</span>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full bg-purple-50 p-2.5 rounded-xl border border-purple-200">
+                      <span className="text-xs font-bold text-purple-900 whitespace-nowrap">Vincular pago a:</span>
                       <select
-                        className="bg-white text-xs sm:text-sm font-bold text-purple-950 px-2 py-1 rounded-lg border border-purple-300 outline-none cursor-pointer shadow-inner"
+                        className="w-full text-xs font-semibold bg-white border border-purple-300 rounded-lg p-2 text-purple-900 focus:outline-none truncate cursor-pointer"
                         value={pedidoSeleccionado.pedido_principal_id || ''}
                         onChange={e => cambiarVinculacionPedido(e.target.value)}
                       >
-                        <option value="">Ninguno (Este pedido es el Principal)</option>
+                        <option value="" className="truncate">Ninguno (Este pedido es el Principal)</option>
                         {pedidos
                           .filter(p => p.id !== pedidoSeleccionado.id)
                           .map(p => (
-                            <option key={p.id} value={p.id}>
+                            <option key={p.id} value={p.id} className="truncate">
                               {getDesc(p) || 'Pedido'} ({p.categoria}) - {p.fecha_pedido || 'Sin fecha'}
                             </option>
                           ))}
                       </select>
-                    </span>
+                    </div>
                     {pedidoSeleccionado.pedido_principal_id && (
                       <button
                         type="button"

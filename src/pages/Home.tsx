@@ -22,8 +22,8 @@ export function Home() {
             <Search size={28} />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="font-bold text-base leading-tight">BUSCAR</span>
-            <span className="text-gray-400 text-xs truncate">Gestión individual</span>
+            <span className="font-bold text-base leading-tight">PEDIDOS</span>
+            <span className="text-gray-400 text-xs truncate">Gestión de pedidos</span>
           </div>
         </Link>
 
