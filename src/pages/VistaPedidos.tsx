@@ -674,43 +674,29 @@ export function VistaPedidos() {
                   {clientesConPedidos.map(({ cliente: c, pedidos: pList }) => {
                     const cId = c.id || pList[0]?.cliente_id;
                     const isExpanded = clienteExpandidoId === cId;
-                    const numPedidos = pList.length;
+                    const nombreCompleto = c.nombre_completo || (c.apellidos ? `${capitalize(c.apellidos)}, ${capitalize(c.nombre)}` : capitalize(c.nombre) || 'Cliente');
+                    const cliente = {
+                      ...c,
+                      nombre_completo: nombreCompleto,
+                      total_pedidos: pList.length,
+                    };
 
                     return (
-                      <div key={cId} className="border-2 border-gray-100 rounded-2xl bg-white shadow-sm overflow-hidden transition-all">
+                      <div key={cId} className="rounded-2xl transition-all">
                         <div
                           onClick={() => setClienteExpandidoId(isExpanded ? null : cId)}
-                          className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50/80 transition-colors"
+                          className="flex flex-col gap-1.5 p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm w-full text-left cursor-pointer hover:bg-gray-50/80 transition-colors"
                         >
-                          <div className="flex items-center gap-3 min-w-0 pr-2">
-                            <div className="bg-rose-50 p-2.5 rounded-full text-rose-500 shrink-0">
-                              <User size={22} />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-bold text-gray-900 text-base md:text-lg truncate">
-                                {capitalize(c.apellidos)}, {capitalize(c.nombre)}
-                              </p>
-                              {c.telefono && (
-                                <p className="text-xs text-gray-500 truncate">
-                                  📞 {c.telefono} {c.telefono2 ? `| Tel 2: ${c.telefono2}` : ''}
-                                </p>
-                              )}
-                            </div>
-                          </div>
+                          <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-tight break-words">{cliente.nombre_completo}</h3>
 
-                          <div className="flex items-center gap-2 shrink-0">
-                            {numPedidos >= 2 ? (
+                          <div className="flex items-center justify-between mt-1 pt-1 border-t border-gray-50">
+                            <span className="text-xs text-gray-400 font-medium">Ver detalles</span>
+                            <div className="flex items-center gap-1.5">
                               <span className="bg-purple-100 text-purple-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
-                                {numPedidos} Pedidos
+                                {cliente.total_pedidos} {cliente.total_pedidos === 1 ? 'Pedido' : 'Pedidos'}
                               </span>
-                            ) : (
-                              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-0.5 rounded-full">
-                                1 Pedido
-                              </span>
-                            )}
-                            <span className="text-gray-400 font-bold text-sm ml-1">
-                              {isExpanded ? '▲' : '▼'}
-                            </span>
+                              <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                            </div>
                           </div>
                         </div>
 
