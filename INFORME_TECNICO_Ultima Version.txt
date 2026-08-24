@@ -1,0 +1,114 @@
+================================================================================
+          INFORME TÉCNICO: ESTADO DE CAPTURA Y LECTURA DE PEDIDOS
+================================================================================
+
+1. CAMPOS Y PROPIEDADES GUARDADOS EN EL OBJETO `medidas` (JSONB)
+--------------------------------------------------------------------------------
+El campo `medidas` es un JSON flexible en la base de datos Supabase. Todas las 
+modalidades comparten una estructura base común, a la cual se le añaden 
+propiedades específicas según el tipo de producto/fabricante:
+
+A) Estructura Base Común (Presente en todas las modalidades):
+   - modelo: Nombre o modelo del pedido.
+   - tipo_articulo: 'SENORA', 'NINA' o null.
+   - numTejidos: Número de tejidos configurados (1 a 3) en Flamenca (null en Comunión).
+   - tejido1, tejido2, tejido3: Cadenas con los nombres de tejidos (vacíos en Comunión).
+   - tejidoCancan: Nombre del tejido para can cán (vacío en Comunión).
+   - colorCordoncillo: Color del cordoncillo (vacío en Comunión).
+   - observaciones: Texto con observaciones / detalles de confección.
+   - precioTraje: Precio base del traje en formato string/número.
+   - cargosExtra: Array de objetos con cargos adicionales: [{ concepto: string, precio: string }].
+
+B) Flamenca (Señora / Niña):
+   - pecho: Medida de pecho (cm).
+   - cintura: Medida de cintura (cm).
+   - cadera: Medida de cadera (cm).
+   - manga: Medida de largo de manga (cm).
+   - talle: Medida de talle (cm).
+   - largo_total: Largo total del traje (cm).
+   - contorno_brazo: Contorno de brazo (cm).
+   - talla: Talla seleccionada (o personalizada).
+   *(En edición también contempla 'espalda' y 'talla_especial_detalle' si aplica)*.
+
+C) Novadrima (Comunión Niño / Masculino):
+   Detección: fabricante === 'Novadrima'
+   - Piezas y su Origen:
+     * chaqueta (Talla/medida) y chaqueta_origen ('fabrica' | 'tienda').
+     * pantalon (Talla/medida) y pantalon_origen ('fabrica' | 'tienda').
+     * chalequillo (Talla/medida) y chalequillo_origen ('fabrica' | 'tienda').
+     * camisa (Talla/medida) y camisa_origen ('fabrica' | 'tienda').
+     * camisa_tesp: Detalle de talla especial para la camisa (si la camisa es 'TEsp').
+   - Complementos:
+     * incluir_corbata: Boolean (true/false).
+     * precio_corbata: Valor numérico del importe de la corbata.
+     * incluir_conjunto_interior: Boolean (true/false).
+     * precio_conjunto_interior: Valor numérico del importe del conjunto interior.
+
+D) Anavig / Ana Rosillo (y Lola Rosillo / Rosillo - Comunión Niña):
+   Detección: Categoría COMUNION + fabricante que contiene 'anavig', 'ana rosillo', 'lola rosillo' o 'rosillo'.
+   - Medidas Corporales e Identificativas:
+     * espalda: Medida de espalda (cm).
+     * pecho: Medida de pecho (cm).
+     * cintura: Medida de cintura (cm).
+     * talle: Medida de talle (cm).
+     * largo_total: Medida de largo total (cm).
+     * contorno_brazo: Medida de contorno de brazo (cm).
+     * talla: Talla estándar elegida ('100', '105', ..., '135', 'TEsp').
+     * talla_especial_detalle: Descripción de arreglos o talla especial (si talla === 'TEsp').
+   - Complementos:
+     * incluir_cancan: Boolean (true/false).
+     * precio_cancan: Valor numérico del importe del cancán.
+     * incluir_adorno_pelo: Boolean (true/false).
+     * precio_adorno_pelo: Valor numérico del importe del adorno de pelo.
+     * incluir_conjunto_interior: Boolean (true/false).
+     * precio_conjunto_interior: Valor numérico del importe del conjunto interior.
+
+
+2. CAMPOS ENVIADOS AL OBJETO PRINCIPAL DEL PEDIDO (`pedidos`)
+--------------------------------------------------------------------------------
+- cliente_id (UUID / string): ID del cliente.
+- categoria (string): 'FLAMENCA' | 'COMUNION' | 'OTRO'.
+- fabricante (string): Nombre del fabricante ("Novadrima", "Anavig", "Ana Rosillo", etc.).
+- estilo_comunion (string | null): 'Calle', 'Marinero', 'Almirante' o null.
+- fecha_pedido (DATE / string): Fecha del pedido (YYYY-MM-DD).
+- numero_talon (string | null): Número de talón de fábrica o resguardo.
+- medidas (JSONB): El objeto JSON estructurado descrito en el Punto 1.
+- detalles_tejido (TEXT): Resumen formateado en string plano.
+- precio_total (DECIMAL / number): Importe total calculado acumulando:
+  * precioTraje (precio base)
+  * Suma de cargosExtra
+  * Precios de complementos habilitados
+- pedido_principal_id (UUID | null): Referencia a otro pedido si forma parte de un grupo familiar.
+
+
+3. ESTRUCTURA DE LA INTERFAZ TYPESCRIPT Y PAYLOAD DE SUPABASE
+--------------------------------------------------------------------------------
+A) Interfaz TypeScript (src/types/database.types.ts):
+   export type CategoriaPedido = 'FLAMENCA' | 'COMUNION' | 'OTRO';
+   export type EstadoUbicacion = 'PEDIDO' | 'STOCK';
+   export type EstadoProceso = 'PENDIENTE_LLEGADA' | 'EN_PRUEBAS' | 'EN_ARREGLOS' | 'LISTO' | 'ENTREGADO';
+
+   export interface Pedido {
+     id: string;
+     cliente_id: string;
+     descripcion: string;
+     categoria: CategoriaPedido;
+     tipo_articulo?: 'NINA' | 'SENORA' | null;
+     estilo_comunion?: 'Calle' | 'Marinero' | 'Almirante' | null;
+     estado_ubicacion: EstadoUbicacion;
+     estado_proceso: EstadoProceso;
+     fabricante: string | null;
+     fecha_pedido: string | null;
+     numero_talon?: string | null;
+     medidas: any | null;
+     detalles_tejido: string | null;
+     precio_total: number;
+     foto_ficha_url: string | null;
+     qr_code: string | null;
+     archivado?: boolean;
+     pedido_principal_id?: string | null;
+     created_at: string;
+     updated_at: string;
+   }
+
+================================================================================

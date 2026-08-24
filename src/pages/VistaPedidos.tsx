@@ -6,12 +6,7 @@ import { Cliente, Pedido, Pago } from '../types/database.types';
 import { FABRICANTES_POR_CATEGORIA } from '../constants/fabricantes';
 import { TALLAS_NOVADRIMA_NINO, TALLAS_ANA_ROSILLO_NINA, TALLAS_ANAVIG_NINA } from '../constants/tallas';
 
-const isComunionNinaRosilloAnavig = (categoria?: string | null, fabricante?: string | null) => {
-  const cat = (categoria || '').toUpperCase();
-  if (cat !== 'COMUNION') return false;
-  const fab = (fabricante || '').toLowerCase();
-  return fab.includes('anavig') || fab.includes('ana rosillo') || fab.includes('lola rosillo') || fab.includes('rosillo');
-};
+import { obtenerConfiguracionCampana, isComunionNinaRosilloAnavig } from '../config/campanas';
 
 export function VistaPedidos() {
   const navigate = useNavigate();
@@ -52,15 +47,18 @@ export function VistaPedidos() {
 
   const handleFabricanteChangeVista = (fabNombre: string) => {
     const cat = pedidoSeleccionado?.categoria || 'FLAMENCA';
+    const conf = obtenerConfiguracionCampana(cat, fabNombre);
     const fabList = FABRICANTES_POR_CATEGORIA[cat] || [];
     const fabObj = fabList.find(f => f.nombre === fabNombre || f.id === fabNombre);
     let nuevoTipo = editForm.tipo_articulo;
 
-    if (cat === 'COMUNION' && fabObj) {
-      if (fabObj.genero === 'Nina') {
-        nuevoTipo = 'NINA';
-      } else if (fabObj.genero === 'Nino') {
+    if (cat === 'COMUNION') {
+      if (conf.genero === 'NINO') {
         nuevoTipo = 'NINO';
+      } else if (conf.genero === 'NINA') {
+        nuevoTipo = 'NINA';
+      } else if (fabObj && (fabObj.genero === 'Nina' || fabObj.genero === 'Nino')) {
+        nuevoTipo = fabObj.genero === 'Nina' ? 'NINA' : 'NINO';
       }
     }
 
@@ -276,10 +274,11 @@ export function VistaPedidos() {
     if (!pedidoSeleccionado) return;
     if (!window.confirm("¡Atención! Vas a modificar los datos de este pedido. ¿Confirmas los cambios?")) return;
 
-    const esComunion = pedidoSeleccionado.categoria === 'COMUNION';
+    const config = obtenerConfiguracionCampana(pedidoSeleccionado.categoria, editForm.fabricante);
+    const isNovadrima = config.tipoCaptura === 'PIEZAS_VESTUARIO_NOVADRIMA';
 
     const tejidosList = [];
-    if (!esComunion) {
+    if (config.soportaTejidos) {
       if (editForm.tejido1.trim()) tejidosList.push(`Tejido 1: ${editForm.tejido1.trim()}`);
       if (editForm.numTejidos >= 2 && editForm.tejido2.trim()) tejidosList.push(`Tejido 2: ${editForm.tejido2.trim()}`);
       if (editForm.numTejidos >= 3 && editForm.tejido3.trim()) tejidosList.push(`Tejido 3: ${editForm.tejido3.trim()}`);
@@ -288,15 +287,23 @@ export function VistaPedidos() {
     }
     const tejidosStr = tejidosList.join(' | ');
 
-    const isNovadrima = editForm.fabricante?.trim().toLowerCase() === 'novadrima';
-    const isComunionNina = isComunionNinaRosilloAnavig(pedidoSeleccionado.categoria, editForm.fabricante);
     const pTraje = parseFloat(editForm.precioTraje) || 0;
     const pExtras = (editForm.cargosExtra || []).reduce((a: number, b: any) => a + (parseFloat(b.precio) || 0), 0);
-    const pCorbata = (isNovadrima && editForm.incluirCorbata) ? (parseFloat(editForm.precioCorbata) || 0) : 0;
-    const pCancan = (isComunionNina && editForm.incluirCancan) ? (parseFloat(editForm.precioCancan) || 0) : 0;
-    const pAdornoPelo = (isComunionNina && editForm.incluirAdornoPelo) ? (parseFloat(editForm.precioAdornoPelo) || 0) : 0;
-    const pConjunto = ((isNovadrima || isComunionNina) && editForm.incluirConjuntoInterior) ? (parseFloat(editForm.precioConjuntoInterior) || 0) : 0;
-    const upPrecio = pedidoSeleccionado.pedido_principal_id ? 0 : (pTraje + pExtras + pCorbata + pCancan + pAdornoPelo + pConjunto);
+
+    let pComplementos = 0;
+    for (const comp of config.complementos || []) {
+      if (comp.claveIncluir === 'incluir_corbata' && editForm.incluirCorbata) {
+        pComplementos += parseFloat(editForm.precioCorbata) || 0;
+      } else if (comp.claveIncluir === 'incluir_cancan' && editForm.incluirCancan) {
+        pComplementos += parseFloat(editForm.precioCancan) || 0;
+      } else if (comp.claveIncluir === 'incluir_adorno_pelo' && editForm.incluirAdornoPelo) {
+        pComplementos += parseFloat(editForm.precioAdornoPelo) || 0;
+      } else if (comp.claveIncluir === 'incluir_conjunto_interior' && editForm.incluirConjuntoInterior) {
+        pComplementos += parseFloat(editForm.precioConjuntoInterior) || 0;
+      }
+    }
+
+    const upPrecio = pedidoSeleccionado.pedido_principal_id ? 0 : (pTraje + pExtras + pComplementos);
 
     const upMed = {
       ...pedidoSeleccionado.medidas,
@@ -325,19 +332,19 @@ export function VistaPedidos() {
       precio_adorno_pelo: editForm.incluirAdornoPelo ? Number(editForm.precioAdornoPelo || 0) : 0,
       incluir_conjunto_interior: editForm.incluirConjuntoInterior,
       precio_conjunto_interior: editForm.incluirConjuntoInterior ? Number(editForm.precioConjuntoInterior || 0) : 0,
-      numTejidos: esComunion ? null : editForm.numTejidos,
-      tejido1: esComunion ? '' : editForm.tejido1,
-      tejido2: esComunion ? '' : editForm.tejido2,
-      tejido3: esComunion ? '' : editForm.tejido3,
-      tejidoCancan: esComunion ? '' : editForm.tejidoCancan,
-      colorCordoncillo: esComunion ? '' : editForm.colorCordoncillo,
+      numTejidos: config.soportaTejidos ? editForm.numTejidos : null,
+      tejido1: config.soportaTejidos ? editForm.tejido1 : '',
+      tejido2: config.soportaTejidos ? editForm.tejido2 : '',
+      tejido3: config.soportaTejidos ? editForm.tejido3 : '',
+      tejidoCancan: config.soportaTejidos ? editForm.tejidoCancan : '',
+      colorCordoncillo: config.soportaTejidos ? editForm.colorCordoncillo : '',
       observaciones: editForm.detalles_tejido
     };
     const combinedDetalles = (editForm.tipo_articulo === 'SENORA' || editForm.tipo_articulo === 'NINA' ? '[' + editForm.tipo_articulo + '] ' : '') + (editForm.descripcion ? 'Modelo: ' + editForm.descripcion : '') + (tejidosStr ? ' | ' + tejidosStr : '') + (editForm.detalles_tejido ? ' | ' + editForm.detalles_tejido : '');
 
     const payload: any = {
       fabricante: editForm.fabricante,
-      estilo_comunion: editForm.fabricante === 'Novadrima' || editForm.estilo_comunion ? editForm.estilo_comunion : null,
+      estilo_comunion: isNovadrima ? editForm.estilo_comunion : null,
       fecha_pedido: editForm.fecha_pedido || null,
       numero_talon: editForm.numero_talon || null,
       medidas: upMed,
@@ -941,10 +948,16 @@ export function VistaPedidos() {
   
   const totalPagado = pagos.reduce((acc, p) => acc + Number(p.monto_entrega_cuenta), 0);
 
+  const activeConfig = obtenerConfiguracionCampana(
+    pedidoSeleccionado?.categoria || 'FLAMENCA',
+    isEditing ? editForm.fabricante : pedidoSeleccionado?.fabricante
+  );
+
   const getComplementosPrecios = () => {
+    const isNovadrima = activeConfig.tipoCaptura === 'PIEZAS_VESTUARIO_NOVADRIMA';
+    const isComunionNina = activeConfig.tipoCaptura === 'MEDIDAS_CORPORALES_COMUNION_NINA';
+
     if (isEditing) {
-      const isNovadrima = (editForm.fabricante || '').trim().toLowerCase() === 'novadrima';
-      const isComunionNina = isComunionNinaRosilloAnavig(pedidoSeleccionado?.categoria, editForm.fabricante);
       const corbata = (isNovadrima && editForm.incluirCorbata) ? (parseFloat(editForm.precioCorbata) || 0) : 0;
       const cancan = (isComunionNina && editForm.incluirCancan) ? (parseFloat(editForm.precioCancan) || 0) : 0;
       const adornoPelo = (isComunionNina && editForm.incluirAdornoPelo) ? (parseFloat(editForm.precioAdornoPelo) || 0) : 0;
@@ -952,8 +965,6 @@ export function VistaPedidos() {
       return { corbata, cancan, adornoPelo, conjunto };
     } else {
       const m = pedidoSeleccionado?.medidas || {};
-      const isNovadrima = (pedidoSeleccionado?.fabricante || '').trim().toLowerCase() === 'novadrima';
-      const isComunionNina = isComunionNinaRosilloAnavig(pedidoSeleccionado?.categoria, pedidoSeleccionado?.fabricante);
       const corbata = (isNovadrima && m.incluir_corbata) ? (parseFloat(m.precio_corbata) || 0) : 0;
       const cancan = (isComunionNina && m.incluir_cancan) ? (parseFloat(m.precio_cancan) || 0) : 0;
       const adornoPelo = (isComunionNina && m.incluir_adorno_pelo) ? (parseFloat(m.precio_adorno_pelo) || 0) : 0;
@@ -1573,9 +1584,9 @@ export function VistaPedidos() {
               )}
             </div>
             
-            {(isEditing ? editForm.fabricante : pedidoSeleccionado.fabricante)?.trim().toLowerCase() === 'novadrima' ? (
+            {activeConfig.tipoCaptura === 'PIEZAS_VESTUARIO_NOVADRIMA' ? (
               isEditing ? renderVistaNovadrimaEdicion() : renderVistaNovadrimaLectura()
-            ) : isComunionNinaRosilloAnavig(pedidoSeleccionado.categoria, isEditing ? editForm.fabricante : pedidoSeleccionado.fabricante) ? (
+            ) : activeConfig.tipoCaptura === 'MEDIDAS_CORPORALES_COMUNION_NINA' ? (
               isEditing ? renderVistaComunionNinaEdicion() : renderVistaComunionNinaLectura()
             ) : (
               <div className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-2.5">
@@ -1749,33 +1760,25 @@ export function VistaPedidos() {
                 </div>
 
                 {/* Desglose de complementos seleccionados */}
-                {(compPrecios.corbata > 0 || compPrecios.cancan > 0 || compPrecios.adornoPelo > 0 || compPrecios.conjunto > 0) && (
+                {!pedidoSeleccionado.pedido_principal_id && activeConfig.complementos && activeConfig.complementos.length > 0 && (
                   <div className="border-t border-rose-200 pt-2 space-y-1 text-xs sm:text-sm">
                     <span className="text-xs font-bold text-rose-700 uppercase block mb-1">Complementos Seleccionados:</span>
-                    {compPrecios.corbata > 0 && (
-                      <div className="flex justify-between items-center text-gray-800 bg-white p-2 rounded-lg border border-rose-100">
-                        <span className="font-semibold">Corbata</span>
-                        <span className="font-bold text-rose-900">+{compPrecios.corbata.toFixed(2)} €</span>
-                      </div>
-                    )}
-                    {compPrecios.cancan > 0 && (
-                      <div className="flex justify-between items-center text-gray-800 bg-white p-2 rounded-lg border border-rose-100">
-                        <span className="font-semibold">Can Can</span>
-                        <span className="font-bold text-rose-900">+{compPrecios.cancan.toFixed(2)} €</span>
-                      </div>
-                    )}
-                    {compPrecios.adornoPelo > 0 && (
-                      <div className="flex justify-between items-center text-gray-800 bg-white p-2 rounded-lg border border-rose-100">
-                        <span className="font-semibold">Adorno Pelo</span>
-                        <span className="font-bold text-rose-900">+{compPrecios.adornoPelo.toFixed(2)} €</span>
-                      </div>
-                    )}
-                    {compPrecios.conjunto > 0 && (
-                      <div className="flex justify-between items-center text-gray-800 bg-white p-2 rounded-lg border border-rose-100">
-                        <span className="font-semibold">Conjunto Interior</span>
-                        <span className="font-bold text-rose-900">+{compPrecios.conjunto.toFixed(2)} €</span>
-                      </div>
-                    )}
+                    {activeConfig.complementos.map(c => {
+                      let price = 0;
+                      if (c.claveIncluir === 'incluir_corbata') price = compPrecios.corbata;
+                      else if (c.claveIncluir === 'incluir_cancan') price = compPrecios.cancan;
+                      else if (c.claveIncluir === 'incluir_adorno_pelo') price = compPrecios.adornoPelo;
+                      else if (c.claveIncluir === 'incluir_conjunto_interior') price = compPrecios.conjunto;
+
+                      if (price <= 0) return null;
+
+                      return (
+                        <div key={c.claveIncluir} className="flex justify-between items-center text-gray-800 bg-white p-2 rounded-lg border border-rose-100">
+                          <span className="font-semibold">{c.etiqueta}</span>
+                          <span className="font-bold text-rose-900">+{price.toFixed(2)} €</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
