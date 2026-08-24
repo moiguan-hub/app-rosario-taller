@@ -692,7 +692,13 @@ export function VistaPedidos() {
                           <div className="flex items-center justify-between mt-1 pt-1 border-t border-gray-50">
                             <span className="text-xs text-gray-400 font-medium">Ver detalles</span>
                             <div className="flex items-center gap-1.5">
-                              <span className="bg-purple-100 text-purple-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                              <span
+                                className={`text-xs font-bold px-2.5 py-0.5 rounded-full transition-colors ${
+                                  cliente.total_pedidos > 1
+                                    ? 'bg-purple-100 text-purple-900 border border-purple-300 font-extrabold shadow-sm'
+                                    : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                }`}
+                              >
                                 {cliente.total_pedidos} {cliente.total_pedidos === 1 ? 'Pedido' : 'Pedidos'}
                               </span>
                               <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
