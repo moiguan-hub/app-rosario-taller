@@ -19,6 +19,7 @@ export function VistaPedidos() {
   const [todosLosPedidos, setTodosLosPedidos] = useState<any[]>([]);
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [nuevoPago, setNuevoPago] = useState('');
+  const [nuevaFechaPago, setNuevaFechaPago] = useState(new Date().toISOString().split('T')[0]);
   const [loadingPago, setLoadingPago] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -41,6 +42,7 @@ export function VistaPedidos() {
   const [nuevoCargoPrecio, setNuevoCargoPrecio] = useState('');
   const [loadingCargo, setLoadingCargo] = useState(false);
   const [editPagos, setEditPagos] = useState<{[key: string]: string}>({});
+  const [editPagosFechas, setEditPagosFechas] = useState<{[key: string]: string}>({});
   const [modalContacto, setModalContacto] = useState<{ tipo: 'call' | 'wa', tel1: string, nom1: string, tel2: string, nom2: string } | null>(null);
   const [pedidoPrincipal, setPedidoPrincipal] = useState<Pedido | null>(null);
   const [clienteExpandidoId, setClienteExpandidoId] = useState<string | null>(null);
@@ -265,8 +267,13 @@ export function VistaPedidos() {
       precio_total: pedidoSeleccionado.precio_total.toString()
     });
     const pMap: any = {};
-    pagos.forEach(p => pMap[p.id] = p.monto_entrega_cuenta.toString());
+    const pFechaMap: any = {};
+    pagos.forEach(p => {
+      pMap[p.id] = p.monto_entrega_cuenta.toString();
+      pFechaMap[p.id] = p.fecha || new Date().toISOString().split('T')[0];
+    });
     setEditPagos(pMap);
+    setEditPagosFechas(pFechaMap);
     setIsEditing(true);
   };
 
@@ -362,8 +369,18 @@ export function VistaPedidos() {
     // Update pagos
     for (const p of pagos) {
       const newVal = parseFloat(editPagos[p.id]);
+      const newFecha = editPagosFechas[p.id] || p.fecha;
+      const updatePayload: any = {};
+
       if (!isNaN(newVal) && newVal !== Number(p.monto_entrega_cuenta)) {
-        await supabase.from('pagos').update({ monto_entrega_cuenta: newVal }).eq('id', p.id);
+        updatePayload.monto_entrega_cuenta = newVal;
+      }
+      if (newFecha && newFecha !== p.fecha) {
+        updatePayload.fecha = newFecha;
+      }
+
+      if (Object.keys(updatePayload).length > 0) {
+        await supabase.from('pagos').update(updatePayload).eq('id', p.id);
       }
     }
     const { data: updatedPagos } = await supabase.from('pagos').select('*').eq('pedido_id', pedidoSeleccionado.id).order('fecha', { ascending: true });
@@ -848,14 +865,27 @@ export function VistaPedidos() {
   const guardarNuevoPago = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pedidoSeleccionado || !nuevoPago || parseFloat(nuevoPago) <= 0) return;
-    if (!window.confirm(`¿Confirmas que deseas añadir un abono de ${nuevoPago} € a este pedido?`)) return;
+    const fechaAbono = nuevaFechaPago || new Date().toISOString().split('T')[0];
+    if (!window.confirm(`¿Confirmas que deseas añadir un abono de ${nuevoPago} € (${fechaAbono}) a este pedido?`)) return;
     setLoadingPago(true);
     try {
-      const { data, error } = await supabase.from('pagos').insert([{ pedido_id: pedidoSeleccionado.id, monto_entrega_cuenta: parseFloat(nuevoPago), fecha: new Date().toISOString().split('T')[0] }]).select().single();
+      const { data, error } = await supabase.from('pagos').insert([{ pedido_id: pedidoSeleccionado.id, monto_entrega_cuenta: parseFloat(nuevoPago), fecha: fechaAbono }]).select().single();
       if (error) throw error;
       setPagos([...pagos, data]);
       setNuevoPago('');
+      setNuevaFechaPago(new Date().toISOString().split('T')[0]);
     } catch (err: any) { alert('Error: ' + err.message); } finally { setLoadingPago(false); }
+  };
+
+  const guardarFechaPagoRapida = async (pagoId: string, nuevaFecha: string) => {
+    if (!nuevaFecha) return;
+    const nuevosPagos = pagos.map(p => p.id === pagoId ? { ...p, fecha: nuevaFecha } : p);
+    setPagos(nuevosPagos);
+    const { error } = await supabase.from('pagos').update({ fecha: nuevaFecha }).eq('id', pagoId);
+    if (error) {
+      console.error('Error al actualizar fecha de pago:', error);
+      alert('Error al guardar la fecha: ' + error.message);
+    }
   };
   const guardarNuevoCargoExtra = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1287,13 +1317,11 @@ export function VistaPedidos() {
                       <div key={cId} className="rounded-2xl transition-all">
                         <div
                           onClick={() => setClienteExpandidoId(isExpanded ? null : cId)}
-                          className="flex flex-col gap-1.5 p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm w-full text-left cursor-pointer hover:bg-gray-50/80 transition-colors"
+                          className="flex flex-col gap-2 p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm w-full text-left cursor-pointer hover:bg-gray-50/80 transition-colors"
                         >
-                          <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-tight break-words">{cliente.nombre_completo}</h3>
-
-                          <div className="flex items-center justify-between mt-1 pt-1 border-t border-gray-50">
-                            <span className="text-xs text-gray-400 font-medium">Ver detalles</span>
-                            <div className="flex items-center gap-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-bold text-gray-900 text-base sm:text-lg leading-tight break-words">{cliente.nombre_completo}</h3>
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <span
                                 className={`text-xs font-bold px-2.5 py-0.5 rounded-full transition-colors ${
                                   cliente.total_pedidos > 1
@@ -1305,6 +1333,41 @@ export function VistaPedidos() {
                               </span>
                               <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
                             </div>
+                          </div>
+
+                          <div className="pt-2 border-t border-gray-100 flex flex-col gap-1">
+                            {pList.map((p, idx) => {
+                              const fab = p.fabricante || 'Sin especificar';
+                              const rawModelo = p.medidas?.modelo || p.descripcion || (p.detalles_tejido ? p.detalles_tejido.split(' | ')[0] : '') || '';
+                              const modelo = rawModelo
+                                .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*\[(SENORA|NINA)\]\s*/i, '')
+                                .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*/i, '')
+                                .replace(/^\[(SENORA|NINA)\]\s*/i, '')
+                                .replace(/^Modelo:\s*/i, '')
+                                .trim() || 'Sin modelo';
+
+                              const tallaVal = p.medidas?.talla;
+                              const talla = tallaVal && tallaVal !== '-' ? (tallaVal === 'TEspecial' ? 'TEsp' : tallaVal) : null;
+
+                              return (
+                                <div key={p.id || idx} className="text-sm sm:text-base font-semibold text-gray-800 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                  <span className="font-extrabold text-gray-900">{fab}</span>
+                                  <span className="text-gray-300 font-normal">•</span>
+                                  <span className="text-gray-700 font-medium">{modelo}</span>
+                                  {talla && (
+                                    <>
+                                      <span className="text-gray-300 font-normal">•</span>
+                                      <span className="text-rose-700 font-bold">Talla: {talla}</span>
+                                    </>
+                                  )}
+                                  {!p.pedido_principal_id && pList.length > 1 && (
+                                    <span className="text-[10px] bg-amber-100 text-amber-900 font-black px-1.5 py-0.5 rounded-full border border-amber-300 ml-1">
+                                      Principal
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
 
@@ -1343,9 +1406,11 @@ export function VistaPedidos() {
                                     </span>
                                   )}
                                   {!p.pedido_principal_id ? (
-                                    <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">
-                                      👑 Pedido Principal (Cobro Unificado)
-                                    </span>
+                                    pList.length > 1 ? (
+                                      <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">
+                                        👑 Pedido Principal (Cobro Unificado)
+                                      </span>
+                                    ) : null
                                   ) : (
                                     <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold px-2.5 py-1 rounded-full">
                                       🔗 Vinculado a Pedido Principal
@@ -1370,7 +1435,7 @@ export function VistaPedidos() {
         <div className="space-y-6 animate-fadeIn">
           <div className="bg-gray-900 p-4 rounded-xl shadow-md text-white"><p className="text-xs text-gray-400 font-semibold uppercase mb-1">Cliente</p><p className="font-bold text-xl">{clienteSeleccionado.nombre} {clienteSeleccionado.apellidos}</p></div>
           <h3 className="font-bold text-gray-700 uppercase text-sm border-b pb-2">Historial ({pedidos.length})</h3>
-          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className={`p-4 rounded-xl hover:border-rose-300 cursor-pointer flex items-start shadow-sm ${!p.pedido_principal_id ? 'border-2 border-amber-300 bg-amber-50/30' : 'border-2 border-gray-100 bg-white'}`}><FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} /><div className="flex-1 w-full min-w-0"><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p><p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p><div className="flex flex-wrap gap-2 mt-2">{p.estado_proceso === 'ENTREGADO' ? <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">ENTREGADO</span> : <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span>}{!p.pedido_principal_id ? <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">👑 Pedido Principal (Cobro Unificado)</span> : <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold px-2.5 py-1 rounded-full">🔗 Vinculado a Pedido Principal</span>}</div></div></div>))}</div>
+          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className={`p-4 rounded-xl hover:border-rose-300 cursor-pointer flex items-start shadow-sm ${!p.pedido_principal_id ? 'border-2 border-amber-300 bg-amber-50/30' : 'border-2 border-gray-100 bg-white'}`}><FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} /><div className="flex-1 w-full min-w-0"><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p><p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p><div className="flex flex-wrap gap-2 mt-2">{p.estado_proceso === 'ENTREGADO' ? <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">ENTREGADO</span> : <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span>}{!p.pedido_principal_id ? (pedidos.length > 1 ? <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">👑 Pedido Principal (Cobro Unificado)</span> : null) : <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold px-2.5 py-1 rounded-full">🔗 Vinculado a Pedido Principal</span>}</div></div></div>))}</div>
         </div>
       )}
 
@@ -1466,9 +1531,11 @@ export function VistaPedidos() {
                   <h3 className="text-2xl md:text-3xl font-black text-gray-900 break-words">{getDesc(pedidoSeleccionado)}</h3>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
                     {!pedidoSeleccionado.pedido_principal_id ? (
-                      <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">
-                        👑 Pedido Principal (Cobro Unificado)
-                      </span>
+                      pedidos.length > 1 ? (
+                        <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">
+                          👑 Pedido Principal (Cobro Unificado)
+                        </span>
+                      ) : null
                     ) : (
                       <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold px-2.5 py-1 rounded-full">
                         🔗 Vinculado a Pedido Principal
@@ -1827,11 +1894,80 @@ export function VistaPedidos() {
             </div>
             <div className="border-t border-rose-200 pt-3">
               <p className="text-xs font-bold text-rose-600 uppercase mb-2">Entregas a cuenta:</p>
-              {pagos.length === 0 ? <p className="text-sm text-gray-500 italic">Sin pagos registrados.</p> : pagos.map((p, i) => <div key={p.id} className="flex justify-between items-center text-xs sm:text-sm bg-white p-2 rounded-lg border border-rose-100 mb-2 gap-2"><span className="text-gray-500 truncate">#{i + 1} - {p.fecha}</span>{isEditing ? <input type="number" step="0.01" className="p-1 border border-rose-200 rounded outline-none text-right font-bold focus:border-rose-500 w-20 sm:w-24" value={editPagos[p.id] || ''} onChange={e => setEditPagos({...editPagos, [p.id]: e.target.value})} /> : <span className="font-bold text-green-600 whitespace-nowrap">+{Number(p.monto_entrega_cuenta).toFixed(2)} €</span>}</div>)}
+              {pagos.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">Sin pagos registrados.</p>
+              ) : (
+                pagos.map((p, i) => (
+                  <div key={p.id} className="flex justify-between items-center text-xs sm:text-sm bg-white p-2 rounded-lg border border-rose-100 mb-2 gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span className="text-xs font-black text-rose-800 shrink-0">#{i + 1}</span>
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          className="p-1 border border-rose-200 rounded outline-none font-semibold text-gray-700 focus:border-rose-500 text-xs w-full max-w-[130px]"
+                          value={editPagosFechas[p.id] ?? (p.fecha || '')}
+                          onChange={e => setEditPagosFechas({ ...editPagosFechas, [p.id]: e.target.value })}
+                        />
+                      ) : (
+                        <input
+                          type="date"
+                          className="p-1 border border-rose-200 rounded outline-none font-semibold text-gray-700 focus:border-rose-500 text-xs w-full max-w-[130px]"
+                          value={p.fecha || ''}
+                          onChange={e => guardarFechaPagoRapida(p.id, e.target.value)}
+                        />
+                      )}
+                    </div>
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="p-1 border border-rose-200 rounded outline-none text-right font-bold focus:border-rose-500 w-20 sm:w-24 text-xs sm:text-sm"
+                        value={editPagos[p.id] || ''}
+                        onChange={e => setEditPagos({ ...editPagos, [p.id]: e.target.value })}
+                      />
+                    ) : (
+                      <span className="font-bold text-green-600 whitespace-nowrap text-xs sm:text-sm">
+                        +{Number(p.monto_entrega_cuenta).toFixed(2)} €
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
             <div className="flex justify-between items-center pt-3 border-t-2 border-rose-200 mt-4 gap-2"><span className="font-black text-rose-900 uppercase text-xs sm:text-sm">Restante:</span><span className="text-2xl sm:text-3xl font-black text-rose-600 whitespace-nowrap">{restante.toFixed(2)} €</span></div>
             {restante > 0 && (
-              <form onSubmit={guardarNuevoPago} className="flex flex-col gap-3 mt-4 pt-4 border-t border-rose-200"><input type="number" step="0.01" inputMode="decimal" placeholder="Abono (€)" className="w-full p-3 border-2 border-rose-200 rounded-xl outline-none font-bold focus:border-rose-400 text-center" value={nuevoPago} onChange={e => setNuevoPago(e.target.value)} /><button type="submit" disabled={loadingPago} className="w-full bg-rose-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-rose-700 flex items-center justify-center"><Plus size={20} className="mr-1"/> Añadir</button></form>
+              <form onSubmit={guardarNuevoPago} className="flex flex-col gap-3 mt-4 pt-4 border-t border-rose-200">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-extrabold text-rose-700 uppercase mb-1">Fecha del Abono</label>
+                    <input
+                      type="date"
+                      className="w-full p-2.5 border-2 border-rose-200 rounded-xl outline-none font-bold focus:border-rose-400 text-center text-xs sm:text-sm bg-white"
+                      value={nuevaFechaPago}
+                      onChange={e => setNuevaFechaPago(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-extrabold text-rose-700 uppercase mb-1">Importe (€)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      inputMode="decimal"
+                      placeholder="Abono (€)"
+                      className="w-full p-2.5 border-2 border-rose-200 rounded-xl outline-none font-bold focus:border-rose-400 text-center text-xs sm:text-sm bg-white"
+                      value={nuevoPago}
+                      onChange={e => setNuevoPago(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={loadingPago}
+                  className="w-full bg-rose-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-rose-700 flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <Plus size={20} className="mr-1"/> Añadir Abono
+                </button>
+              </form>
             )}
               </>
             )}
