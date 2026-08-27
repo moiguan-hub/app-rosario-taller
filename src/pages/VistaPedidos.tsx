@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone, MessageCircle, PackageCheck, Ticket, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, User, FileText, CheckCircle, Plus, Edit3, Save, X, Factory, Phone, MessageCircle, PackageCheck, Ticket, Trash2, Eye } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Cliente, Pedido, Pago } from '../types/database.types';
 import { FABRICANTES_POR_CATEGORIA } from '../constants/fabricantes';
@@ -798,6 +798,40 @@ export function VistaPedidos() {
     }
   };
 
+  const toggleRequiereRevision = async () => {
+    if (!pedidoSeleccionado) return;
+    const targetId = pedidoSeleccionado.id;
+    const actual = !!(pedidoSeleccionado.requiere_revision || pedidoSeleccionado.medidas?.requiere_revision);
+    const nuevoVal = !actual;
+
+    const nuevasMedidas = { ...(pedidoSeleccionado.medidas || {}), requiere_revision: nuevoVal };
+    const pNew: Pedido = {
+      ...pedidoSeleccionado,
+      requiere_revision: nuevoVal,
+      medidas: nuevasMedidas
+    };
+
+    setPedidoSeleccionado(pNew);
+    setPedidos(prev => prev.map(p => p.id === targetId ? { ...p, requiere_revision: nuevoVal, medidas: { ...(p.medidas || {}), requiere_revision: nuevoVal } } : p));
+    setTodosLosPedidos(prev => prev.map(p => p.id === targetId ? { ...p, requiere_revision: nuevoVal, medidas: { ...(p.medidas || {}), requiere_revision: nuevoVal } } : p));
+
+    try {
+      let { error } = await supabase
+        .from('pedidos')
+        .update({ requiere_revision: nuevoVal, medidas: nuevasMedidas })
+        .eq('id', targetId);
+
+      if (error && (error.message.includes('requiere_revision') || error.message.includes('schema cache'))) {
+        await supabase
+          .from('pedidos')
+          .update({ medidas: nuevasMedidas })
+          .eq('id', targetId);
+      }
+    } catch (err: any) {
+      console.error('Error al actualizar requiere_revision:', err);
+    }
+  };
+
   const guardarTipoRapido = async (val: string) => {
     if (!pedidoSeleccionado) return;
     const tipoArt = (val || null) as 'NINA' | 'SENORA' | null;
@@ -1322,6 +1356,11 @@ export function VistaPedidos() {
                           <div className="flex items-start justify-between gap-2">
                             <h3 className="font-bold text-gray-900 text-base sm:text-lg leading-tight break-words">{cliente.nombre_completo}</h3>
                             <div className="flex items-center gap-1.5 shrink-0">
+                              {pList.some(p => p.requiere_revision || p.medidas?.requiere_revision) && (
+                                <span className="text-xs font-black bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full border border-amber-500 shadow-xs flex items-center gap-1 animate-pulse">
+                                  <Eye size={12} /> REVISAR
+                                </span>
+                              )}
                               <span
                                 className={`text-xs font-bold px-2.5 py-0.5 rounded-full transition-colors ${
                                   cliente.total_pedidos > 1
@@ -1363,6 +1402,11 @@ export function VistaPedidos() {
                                   {!p.pedido_principal_id && pList.length > 1 && (
                                     <span className="text-[10px] bg-amber-100 text-amber-900 font-black px-1.5 py-0.5 rounded-full border border-amber-300 ml-1">
                                       Principal
+                                    </span>
+                                  )}
+                                  {(p.requiere_revision || p.medidas?.requiere_revision) && (
+                                    <span className="text-[10px] bg-amber-400 text-amber-950 font-black px-1.5 py-0.5 rounded-full border border-amber-500 ml-1 inline-flex items-center gap-0.5">
+                                      <Eye size={10} /> Revisar
                                     </span>
                                   )}
                                 </div>
@@ -1416,6 +1460,11 @@ export function VistaPedidos() {
                                       🔗 Vinculado a Pedido Principal
                                     </span>
                                   )}
+                                  {(p.requiere_revision || p.medidas?.requiere_revision) && (
+                                    <span className="inline-flex items-center gap-1 bg-amber-400 text-amber-950 border border-amber-500 text-xs font-black px-2.5 py-1 rounded-full shadow-sm animate-pulse">
+                                      <Eye size={13} /> Revisar
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -1435,7 +1484,50 @@ export function VistaPedidos() {
         <div className="space-y-6 animate-fadeIn">
           <div className="bg-gray-900 p-4 rounded-xl shadow-md text-white"><p className="text-xs text-gray-400 font-semibold uppercase mb-1">Cliente</p><p className="font-bold text-xl">{clienteSeleccionado.nombre} {clienteSeleccionado.apellidos}</p></div>
           <h3 className="font-bold text-gray-700 uppercase text-sm border-b pb-2">Historial ({pedidos.length})</h3>
-          <div className="space-y-3">{pedidos.length === 0 ? <p className="text-center text-gray-500">Sin pedidos.</p> : pedidos.map(p => (<div key={p.id} onClick={() => seleccionarPedido(p)} className={`p-4 rounded-xl hover:border-rose-300 cursor-pointer flex items-start shadow-sm ${!p.pedido_principal_id ? 'border-2 border-amber-300 bg-amber-50/30' : 'border-2 border-gray-100 bg-white'}`}><FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} /><div className="flex-1 w-full min-w-0"><p className="font-bold text-gray-800 text-lg">{p.categoria}</p><p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p><p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p><p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p><div className="flex flex-wrap gap-2 mt-2">{p.estado_proceso === 'ENTREGADO' ? <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">ENTREGADO</span> : <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}</span>}{!p.pedido_principal_id ? (pedidos.length > 1 ? <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">👑 Pedido Principal (Cobro Unificado)</span> : null) : <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold px-2.5 py-1 rounded-full">🔗 Vinculado a Pedido Principal</span>}</div></div></div>))}</div>
+          <div className="space-y-3">
+            {pedidos.length === 0 ? (
+              <p className="text-center text-gray-500">Sin pedidos.</p>
+            ) : (
+              pedidos.map(p => (
+                <div
+                  key={p.id}
+                  onClick={() => seleccionarPedido(p)}
+                  className={`p-4 rounded-xl hover:border-rose-300 cursor-pointer flex items-start shadow-sm ${
+                    !p.pedido_principal_id ? 'border-2 border-amber-300 bg-amber-50/30' : 'border-2 border-gray-100 bg-white'
+                  }`}
+                >
+                  <FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} />
+                  <div className="flex-1 w-full min-w-0">
+                    <p className="font-bold text-gray-800 text-lg">{p.categoria}</p>
+                    <p className="text-lg text-gray-600 font-medium mt-1 leading-tight break-words">{getDesc(p)}</p>
+                    <p className="text-base text-gray-500 mt-1">Pedido el {p.fecha_pedido}</p>
+                    <p className="text-base text-gray-500 w-full truncate">Fabricante: {p.fabricante || 'Sin especificar'}</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {p.estado_proceso === 'ENTREGADO' ? (
+                        <span className="inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap bg-purple-100 text-purple-700">ENTREGADO</span>
+                      ) : (
+                        <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${p.estado_ubicacion === 'STOCK' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {p.estado_ubicacion === 'STOCK' ? 'EN TIENDA' : 'EN FÁBRICA'}
+                        </span>
+                      )}
+                      {!p.pedido_principal_id ? (
+                        pedidos.length > 1 ? (
+                          <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-1 rounded-full shadow-sm">👑 Pedido Principal (Cobro Unificado)</span>
+                        ) : null
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold px-2.5 py-1 rounded-full">🔗 Vinculado a Pedido Principal</span>
+                      )}
+                      {(p.requiere_revision || p.medidas?.requiere_revision) && (
+                        <span className="inline-flex items-center gap-1 bg-amber-400 text-amber-950 border border-amber-500 text-xs font-black px-2.5 py-1 rounded-full shadow-sm animate-pulse">
+                          <Eye size={14} /> Revisar
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 
@@ -1462,6 +1554,7 @@ export function VistaPedidos() {
                   >
                     <span className="text-sm">{esVinculado ? '🔗' : '👑'}</span>
                     <span>{titulo}</span>
+                    {(p.requiere_revision || p.medidas?.requiere_revision) && <span className="text-xs">👁️</span>}
                     {fecha && (
                       <span className={`text-xs ${isSelected ? 'text-rose-100' : 'text-gray-400'}`}>
                         ({fecha})
@@ -1576,6 +1669,19 @@ export function VistaPedidos() {
                         onChange={e => guardarTalonRapido(e.target.value)}
                       />
                     </span>
+                    <button
+                      type="button"
+                      onClick={toggleRequiereRevision}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs md:text-sm border transition-all cursor-pointer shadow-xs ${
+                        (pedidoSeleccionado.requiere_revision || pedidoSeleccionado.medidas?.requiere_revision)
+                          ? 'bg-amber-400 text-amber-950 border-amber-500 hover:bg-amber-500 animate-pulse'
+                          : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                      }`}
+                      title="Marcar / Desmarcar Requiere Revisión"
+                    >
+                      <Eye size={18} />
+                      <span>{(pedidoSeleccionado.requiere_revision || pedidoSeleccionado.medidas?.requiere_revision) ? 'Requiere Revisión' : 'Marcar Revisión'}</span>
+                    </button>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full bg-purple-50 p-2.5 rounded-xl border border-purple-200">
                       <span className="text-xs font-bold text-purple-900 whitespace-nowrap">Vincular pago a:</span>
                       <select

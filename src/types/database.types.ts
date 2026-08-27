@@ -33,6 +33,7 @@ export interface Pedido {
   qr_code: string | null;
   archivado?: boolean;
   pedido_principal_id?: string | null;
+  requiere_revision?: boolean;
   created_at: string;
   updated_at: string;
 }

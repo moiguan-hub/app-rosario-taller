@@ -1,0 +1,166 @@
+================================================================================
+          INFORME DE ARQUITECTURA, FUNCIONAMIENTO Y GUÍA DE DESARROLLO
+                              APP ROSARIO (2026)
+================================================================================
+
+1. RESUMEN EJECUTIVO
+--------------------------------------------------------------------------------
+APP Rosario es una plataforma web integral para la gestión operativa y 
+económica de un taller/tienda de moda (trajes de flamenca y comunión).
+
+Los cambios de arquitectura realizados desacoplan la lógica de captura rígida 
+dando paso a un MOTOR DE CAMPAÑAS DINÁMICAS. Este motor adapta automáticamente 
+la toma de medidas, componentes (piezas vs. medidas corporales), complementos y 
+cálculos económicos según la campaña activa ('FLAMENCA' | 'COMUNION') y 
+del fabricante (Novadrima, Ana Rosillo, Anavig, Ana Barroso, Aires de Ferias, etc.).
+
+
+2. STACK TECNOLÓGICO Y ESTRUCTURA DE ARCHIVOS
+--------------------------------------------------------------------------------
+- Frontend: React 18, TypeScript, Vite.
+- Enrutamiento: React Router DOM v7.
+- Estilos UI: Tailwind CSS, Lucide React.
+- Backend / Base de Datos: Supabase (PostgreSQL), SDK `@supabase/supabase-js`.
+
+Estructura del Proyecto (`src/`):
+  src/
+  ├── config/
+  │   └── campanas.ts          # Motor de configuración de campañas.
+  ├── constants/
+  │   ├── fabricantes.ts       # Lista de fabricantes agrupados por categoría.
+  │   └── tallas.ts            # Tablas de medidas por fabricante/talla.
+  ├── lib/
+  │   └── supabase.ts          # Cliente de conexión Supabase.
+  ├── types/
+  │   └── database.types.ts    # Interfaces TypeScript.
+  ├── pages/
+  │   ├── Home.tsx             # Inicio y accesos directos.
+  │   ├── NuevoPedido.tsx      # Alta de clientes y captura de pedidos.
+  │   ├── VistaPedidos.tsx     # Gestión, edición, fichas técnicas y cobros.
+  │   ├── VistaClientes.tsx    # Gestión CRUD de clientes e historial.
+  │   ├── VistaTallas.tsx      # Guía interactiva de medidas y tallas.
+  │   └── VistaConsultas.tsx   # Informes para taller, filtros y Cierre de Campaña.
+  └── App.tsx                  # Router principal y Selector de Campaña.
+
+
+3. ARQUITECTURA: MOTOR DE CAMPAÑAS DINÁMICAS (`src/config/campanas.ts`)
+--------------------------------------------------------------------------------
+Se implementó una capa de abstracción basada en `obtenerConfiguracionCampana(categoria, fabricante)`.
+
+Tipos de Captura Soportados (`TipoCapturaCampana`):
+1. `MEDIDAS_CORPORALES_FLAMENCA`:
+   - Trajes de flamenca (Señora / Niña).
+   - Medidas: Pecho, Cintura, Cadera, Manga, Talle, Largo Total, Contorno Brazo, Espalda.
+   - Telas: Hasta 3 tejidos, Tejido Cancán y Color Cordoncillo. Tipo: SEÑORA/NIÑA.
+
+2. `PIEZAS_VESTUARIO_NOVADRIMA`:
+   - Comunión Niño (Novadrima).
+   - Piezas: Chaqueta, Pantalón, Chalequillo, Camisa (con Origen: 'fabrica' | 'tienda').
+   - Talla especial de camisa (`camisa_tesp`).
+   - Complementos: Corbata (`precio_corbata`) y Conjunto Interior (`precio_conjunto_interior`).
+
+3. `MEDIDAS_CORPORALES_COMUNION_NINA`:
+   - Comunión Niña (Anavig, Ana Rosillo, Lola Rosillo, Rosillo).
+   - Tallas: '100'...'135' o 'TEsp' (con `talla_especial_detalle`).
+   - Medidas: Espalda, Pecho, Cintura, Talle, Largo Total, Contorno Brazo.
+   - Complementos: Cancán (`precio_cancan`), Adorno Pelo (`precio_adorno_pelo`), Conjunto Interior (`precio_conjunto_interior`).
+
+4. `ESTANDAR`: Fallback para categorías o fabricantes generales.
+
+
+4. MODELO DE DATOS EN SUPABASE
+--------------------------------------------------------------------------------
+A) Tabla `clientes`:
+   - `id`: UUID (PK)
+   - `apellidos`, `nombre`: VARCHAR (Capitalizados automáticamente)
+   - `telefono`: VARCHAR (Principal)
+   - `telefono2`, `contacto2`: VARCHAR (Opcionales)
+   - `direccion`: TEXT | `created_at`: TIMESTAMPTZ
+
+B) Tabla `pedidos`:
+   - `id`: UUID (PK) | `cliente_id`: UUID (FK -> clientes)
+   - `descripcion`: TEXT | `categoria`: 'FLAMENCA' | 'COMUNION' | 'OTRO'
+   - `tipo_articulo`: 'SENORA' | 'NINA' | 'NINO' | NULL
+   - `estilo_comunion`: 'Calle' | 'Marinero' | 'Almirante' | NULL
+   - `estado_ubicacion`: 'PEDIDO' | 'STOCK'
+   - `estado_proceso`: 'PENDIENTE_LLEGADA' | 'EN_PRUEBAS' | 'EN_ARREGLOS' | 'LISTO' | 'ENTREGADO'
+   - `fabricante`: VARCHAR | `fecha_pedido`: DATE/VARCHAR | `numero_talon`: VARCHAR
+   - `medidas`: JSONB (Objeto dinámico adaptado)
+   - `detalles_tejido`: TEXT | `precio_total`: NUMERIC
+   - `archivado`: BOOLEAN DEFAULT false (Cierres de campaña)
+   - `pedido_principal_id`: UUID (FK self-referencing -> pedidos.id)
+   - `requiere_revision`: BOOLEAN DEFAULT false (Alerta visual con icono de ojo)
+   - `created_at`, `updated_at`: TIMESTAMPTZ
+
+C) Tabla `pagos`:
+   - `id`: UUID (PK) | `pedido_id`: UUID (FK -> pedidos)
+   - `monto_entrega_cuenta`: NUMERIC | `fecha`: DATE/VARCHAR | `metodo`: VARCHAR
+
+
+5. FUNCIONAMIENTO COMPLETO DE LA APLICACIÓN
+--------------------------------------------------------------------------------
+5.1 Selector de Campaña Global (`App.tsx`)
+- En la barra superior (Header) existe un selector "Campaña: Flamenca / Comunión".
+- La opción elegida se guarda en `localStorage` ('campana_activa').
+- Condiciona el formulario inicial al crear pedidos y los filtros en consultas.
+
+5.2 Creación de Pedidos (`NuevoPedido.tsx`)
+- Flujo en 2 pasos:
+  * Paso 1 (Cliente): Búsqueda en tiempo real (Apellidos, Nombre, Teléfono 1, Teléfono 2, Contacto 2) o alta de nuevo cliente. Muestra pedidos activos y permite vincular a un "Pedido Principal".
+  * Paso 2 (Detalles): Formulario adaptativo dinámico según `obtenerConfiguracionCampana(...)`.
+    - Desglose Económico Completo: Precio Traje Base + Cargos Extras Ilimitados (Concepto/Precio) + Complementos Específicos + Pago Inicial (Entrega a Cuenta).
+
+5.3 Gestión y Ficha Técnica de Pedidos (`VistaPedidos.tsx`)
+- Navegación persistente de 3 pasos (vía `localStorage`):
+  * Paso 1: Buscador general de clientes y pedidos activos.
+  * Paso 2: Tarjetas de pedidos de un cliente agrupados por pedido principal.
+  * Paso 3: Ficha Técnica Completa del Pedido.
+    - Cambio directo de estado de ubicación, proceso, número de talón y tipo de artículo.
+    - Pestañas superiores para alternar entre pedidos del cliente.
+    - Modo Edición (`isEditing`): Recálculo de precios, edición de cargos extra, medidas, piezas y telas.
+    - Control Económico: Historial de entregas a cuenta, adición de cobros con fecha personalizada y edición de pagos.
+    - Eliminación Permanente con confirmación explícita.
+    - Impresión adaptada mediante `@media print`.
+
+5.4 Gestión de Clientes (`VistaClientes.tsx`)
+- Búsqueda global, edición directa de contacto y eliminación.
+- Histórico desplegable de pedidos por cliente con botón de alta directa.
+
+5.5 Guía de Tallas (`VistaTallas.tsx`)
+- Tablas interactivas de medidas por fabricante y talla (Ana Barroso, Aires de Feria, Ana Rosillo, Anavig, Novadrima).
+
+5.6 Consultas, Informes y Cierre de Campaña (`VistaConsultas.tsx`)
+- Filtros por Campaña, Estado (Fábrica / Tienda / Entregado) y Fabricante. Muestra balance económico (Total, Cobrado, Restante).
+- **Cierre de Campaña**: Modal de advertencia grave con temporizador de 5 segundos antes de poder confirmar. Archiva los pedidos activos de la campaña (`archivado = true`).
+- **Sección Histórico / Restauración**: Consulta de archivados y desarchivado/reapertura por año.
+
+
+6. NOVEDADES Y CAMBIOS RECIENTES DESTACADOS
+--------------------------------------------------------------------------------
+1. Motor de Campañas (`src/config/campanas.ts`): Formularios 100% dinámicos según categoría y fabricante.
+2. Agrupación Familiar (`pedido_principal_id`): Vinculación de pedidos familiares.
+3. Comunión Niño (Novadrima): Piezas (Origen: Fábrica/Tienda), Camisa TEsp y complementos.
+4. Comunión Niña (Anavig / Ana Rosillo / Lola Rosillo): Tallas 100-135/TEsp y complementos.
+5. Cierre de Campaña con Modal con Timer de 5s.
+6. Eliminación directa de pedidos.
+7. Soporte para Teléfono 2 y Contacto 2 en Clientes.
+8. Alerta "Requiere Revisión" (`requiere_revision`) con botón interactivo (icono de ojo) e indicador de alerta en tono ámbar en el listado de pedidos.
+
+
+7. GUÍA PARA EL DESARROLLADOR: CÓMO REALIZAR MODIFICACIONES FUTURAS
+--------------------------------------------------------------------------------
+A) Añadir un nuevo Fabricante:
+   - Editar `src/constants/fabricantes.ts` y agregarlo a la categoría correspondiente.
+
+B) Modificar reglas de Captura / Campaña:
+   - Editar `src/config/campanas.ts` extendiendo `obtenerConfiguracionCampana`.
+
+C) Actualizar tablas de medidas/tallas:
+   - Editar `src/constants/tallas.ts` y refrescar en `src/pages/VistaTallas.tsx`.
+
+D) Cambios en Esquema de Supabase:
+   - Aplicar script SQL en Supabase, actualizar `src/types/database.types.ts` y reflejar los campos en `NuevoPedido.tsx` y `VistaPedidos.tsx`.
+
+================================================================================
+              FIN DEL INFORME DE ARQUITECTURA Y FUNCIONAMIENTO
+================================================================================
