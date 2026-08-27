@@ -19,6 +19,8 @@ export function NuevoPedido() {
   const [busquedaRealizada, setBusquedaRealizada] = useState(false);
 
   const [nuevoCliente, setNuevoCliente] = useState({ apellidos: '', nombre: '', telefono: '', telefono2: '', contacto2: '', direccion: '' });
+  const [sugerenciasClientes, setSugerenciasClientes] = useState<Cliente[]>([]);
+  const [buscandoSugerencias, setBuscandoSugerencias] = useState(false);
   const [pedidosActivosCliente, setPedidosActivosCliente] = useState<any[]>([]);
   const [pedidoPrincipalId, setPedidoPrincipalId] = useState<string>('');
 
@@ -185,10 +187,63 @@ export function NuevoPedido() {
     return () => clearTimeout(t);
   }, [busqueda]);
 
+  useEffect(() => {
+    const termApellidos = nuevoCliente.apellidos.trim();
+    const termNombre = nuevoCliente.nombre.trim();
+
+    if (termApellidos.length < 2 && termNombre.length < 2) {
+      setSugerenciasClientes([]);
+      setBuscandoSugerencias(false);
+      return;
+    }
+
+    setBuscandoSugerencias(true);
+
+    const buscarSugerencias = async () => {
+      try {
+        let filterParts: string[] = [];
+        if (termApellidos.length >= 2) {
+          filterParts.push(`apellidos.ilike.%${termApellidos}%`, `nombre.ilike.%${termApellidos}%`);
+        }
+        if (termNombre.length >= 2) {
+          filterParts.push(`apellidos.ilike.%${termNombre}%`, `nombre.ilike.%${termNombre}%`);
+        }
+
+        const { data, error } = await supabase
+          .from('clientes')
+          .select('*')
+          .or(filterParts.join(','))
+          .limit(5);
+
+        if (!error && data) {
+          setSugerenciasClientes(data);
+        } else {
+          const term = termApellidos || termNombre;
+          const { data: data2 } = await supabase
+            .from('clientes')
+            .select('*')
+            .or(`apellidos.ilike.%${term}%,nombre.ilike.%${term}%`)
+            .limit(5);
+          if (data2) setSugerenciasClientes(data2);
+          else setSugerenciasClientes([]);
+        }
+      } catch (e) {
+        console.error('Error al buscar sugerencias:', e);
+        setSugerenciasClientes([]);
+      } finally {
+        setBuscandoSugerencias(false);
+      }
+    };
+
+    const timer = setTimeout(buscarSugerencias, 300);
+    return () => clearTimeout(timer);
+  }, [nuevoCliente.apellidos, nuevoCliente.nombre]);
+
   const seleccionarCliente = (c: Cliente) => {
     setClienteSeleccionado(c);
     setBusqueda(c.nombre + ' ' + c.apellidos);
     setClientes([]);
+    setSugerenciasClientes([]);
     setBusquedaRealizada(false);
     setPaso(2);
   };
@@ -913,13 +968,57 @@ export function NuevoPedido() {
             <div className="bg-rose-50 p-6 rounded-xl border border-rose-100 space-y-4">
               <p className="text-rose-800 font-semibold text-center mb-2">Dar de alta un nuevo cliente</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Apellidos</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.apellidos} onChange={e => setNuevoCliente({...nuevoCliente, apellidos: e.target.value.replace(/(^\w|\s\w)/g, m => m.toUpperCase())})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Nombre</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.nombre} onChange={e => setNuevoCliente({...nuevoCliente, nombre: e.target.value.replace(/(^\w|\s\w)/g, m => m.toUpperCase())})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono Principal</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.telefono} onChange={e => setNuevoCliente({...nuevoCliente, telefono: e.target.value})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono 2 (Opcional)</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.telefono2} onChange={e => setNuevoCliente({...nuevoCliente, telefono2: e.target.value})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Persona Contacto 2 (Opcional)</label><input type="text" placeholder="Ej. Madre, Juan..." className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white" value={nuevoCliente.contacto2} onChange={e => setNuevoCliente({...nuevoCliente, contacto2: e.target.value})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Dirección</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none" value={nuevoCliente.direccion} onChange={e => setNuevoCliente({...nuevoCliente, direccion: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Apellidos</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.apellidos} onChange={e => setNuevoCliente({...nuevoCliente, apellidos: e.target.value.replace(/(^\w|\s\w)/g, m => m.toUpperCase())})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Nombre</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.nombre} onChange={e => setNuevoCliente({...nuevoCliente, nombre: e.target.value.replace(/(^\w|\s\w)/g, m => m.toUpperCase())})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono Principal</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.telefono} onChange={e => setNuevoCliente({...nuevoCliente, telefono: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono 2 (Opcional)</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.telefono2} onChange={e => setNuevoCliente({...nuevoCliente, telefono2: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Persona Contacto 2 (Opcional)</label><input type="text" placeholder="Ej. Madre, Juan..." className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.contacto2} onChange={e => setNuevoCliente({...nuevoCliente, contacto2: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Dirección</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.direccion} onChange={e => setNuevoCliente({...nuevoCliente, direccion: e.target.value})} /></div>
               </div>
+
+              {buscandoSugerencias && (
+                <p className="text-xs text-rose-600 italic flex items-center gap-1.5 mt-2">
+                  <span className="animate-spin text-sm">🔍</span> Buscando si el cliente ya está registrado...
+                </p>
+              )}
+
+              {!buscandoSugerencias && sugerenciasClientes.length > 0 && (
+                <div className="mt-2 bg-white border-2 border-rose-200 rounded-xl shadow-lg overflow-hidden transition-all">
+                  <div className="bg-rose-100 px-4 py-2 border-b border-rose-200 flex justify-between items-center">
+                    <span className="text-xs font-bold text-rose-800 uppercase flex items-center gap-1.5">
+                      💡 Clientes similares encontrados
+                    </span>
+                    <span className="text-[11px] text-rose-700 font-medium">Haz clic para seleccionar y evitar duplicados</span>
+                  </div>
+                  <div className="divide-y divide-gray-100 max-h-56 overflow-y-auto">
+                    {sugerenciasClientes.map(c => (
+                      <div
+                        key={c.id}
+                        onClick={() => seleccionarCliente(c)}
+                        className="p-3.5 hover:bg-rose-50 cursor-pointer transition-colors flex items-center justify-between group"
+                      >
+                        <div>
+                          <p className="font-bold text-gray-800 text-base group-hover:text-rose-700 transition-colors">
+                            {c.apellidos}, {c.nombre}
+                          </p>
+                          <p className="text-sm text-gray-600 flex items-center gap-2 mt-0.5">
+                            <span>📞 <strong>{c.telefono || 'Sin teléfono'}</strong></span>
+                            {c.telefono2 && <span className="text-gray-400">| Tel 2: {c.telefono2}{c.contacto2 ? ` (${c.contacto2})` : ''}</span>}
+                            {c.direccion && <span className="text-gray-400 truncate max-w-[200px]">| {c.direccion}</span>}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-xs bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg shadow-sm transition-colors whitespace-nowrap ml-3"
+                        >
+                          Usar este cliente →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button onClick={handleContinuar} disabled={loading} className="w-full mt-4 bg-rose-600 text-white p-4 rounded-xl font-bold text-lg hover:bg-rose-700 disabled:bg-rose-300">
                 {loading ? 'Guardando...' : 'Guardar y Continuar al Pedido'}
               </button>
