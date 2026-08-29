@@ -967,14 +967,6 @@ export function NuevoPedido() {
           {!clienteSeleccionado && (
             <div className="bg-rose-50 p-6 rounded-xl border border-rose-100 space-y-4">
               <p className="text-rose-800 font-semibold text-center mb-2">Dar de alta un nuevo cliente</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Apellidos</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.apellidos} onChange={e => setNuevoCliente({...nuevoCliente, apellidos: e.target.value.replace(/(^\w|\s\w)/g, m => m.toUpperCase())})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Nombre</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.nombre} onChange={e => setNuevoCliente({...nuevoCliente, nombre: e.target.value.replace(/(^\w|\s\w)/g, m => m.toUpperCase())})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono Principal</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.telefono} onChange={e => setNuevoCliente({...nuevoCliente, telefono: e.target.value})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono 2 (Opcional)</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.telefono2} onChange={e => setNuevoCliente({...nuevoCliente, telefono2: e.target.value})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Persona Contacto 2 (Opcional)</label><input type="text" placeholder="Ej. Madre, Juan..." className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.contacto2} onChange={e => setNuevoCliente({...nuevoCliente, contacto2: e.target.value})} /></div>
-                <div><label className="text-xs font-bold text-rose-700 uppercase">Dirección</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.direccion} onChange={e => setNuevoCliente({...nuevoCliente, direccion: e.target.value})} /></div>
-              </div>
 
               {buscandoSugerencias && (
                 <p className="text-xs text-rose-600 italic flex items-center gap-1.5 mt-2">
@@ -1018,6 +1010,15 @@ export function NuevoPedido() {
                   </div>
                 </div>
               )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Apellidos</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.apellidos} onChange={e => setNuevoCliente({...nuevoCliente, apellidos: e.target.value.replace(/(^\w|\s\w)/g, m => m.toUpperCase())})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Nombre</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.nombre} onChange={e => setNuevoCliente({...nuevoCliente, nombre: e.target.value.replace(/(^\w|\s\w)/g, m => m.toUpperCase())})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono Principal</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.telefono} onChange={e => setNuevoCliente({...nuevoCliente, telefono: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Teléfono 2 (Opcional)</label><input type="tel" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.telefono2} onChange={e => setNuevoCliente({...nuevoCliente, telefono2: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Persona Contacto 2 (Opcional)</label><input type="text" placeholder="Ej. Madre, Juan..." className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.contacto2} onChange={e => setNuevoCliente({...nuevoCliente, contacto2: e.target.value})} /></div>
+                <div><label className="text-xs font-bold text-rose-700 uppercase">Dirección</label><input type="text" className="w-full p-3 border border-rose-200 rounded-lg outline-none bg-white focus:border-rose-400" value={nuevoCliente.direccion} onChange={e => setNuevoCliente({...nuevoCliente, direccion: e.target.value})} /></div>
+              </div>
 
               <button onClick={handleContinuar} disabled={loading} className="w-full mt-4 bg-rose-600 text-white p-4 rounded-xl font-bold text-lg hover:bg-rose-700 disabled:bg-rose-300">
                 {loading ? 'Guardando...' : 'Guardar y Continuar al Pedido'}
