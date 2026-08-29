@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Printer, ArrowLeft, Filter, RefreshCw, CheckCircle, Factory, PackageCheck, Archive, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Search, Printer, ArrowLeft, Filter, RefreshCw, CheckCircle, Factory, PackageCheck, Archive, AlertTriangle, RotateCcw, Eye } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export function VistaConsultas() {
@@ -374,12 +374,28 @@ export function VistaConsultas() {
           {pedidosFiltrados.map((p) => {
             const clienteNombre = p.clientes ? `${p.clientes.apellidos}, ${p.clientes.nombre}` : 'Cliente no asignado';
             const desc = getDesc(p);
-            
+            const reqRev = !!(p.requiere_revision || p.medidas?.requiere_revision);
+
             return (
-              <div key={p.id} onClick={() => irAPedido(p)} className="p-4 bg-white border-2 border-gray-100 rounded-2xl hover:border-rose-300 cursor-pointer shadow-sm transition-all space-y-2">
+              <div
+                key={p.id}
+                onClick={() => irAPedido(p)}
+                className={`p-4 bg-white rounded-2xl cursor-pointer shadow-sm transition-all space-y-2 ${
+                  reqRev
+                    ? 'border-2 border-red-500 animate-pulse shadow-red-100'
+                    : 'border-2 border-gray-100 hover:border-rose-300'
+                }`}
+              >
                 <div className="flex justify-between items-start gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="font-black text-gray-900 text-base sm:text-lg truncate">{clienteNombre}</p>
+                    <p className="font-black text-gray-900 text-base sm:text-lg truncate flex items-center gap-2">
+                      <span className="truncate">{clienteNombre}</span>
+                      {reqRev && (
+                        <span className="shrink-0 inline-flex items-center gap-1 text-xs font-black bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full border border-amber-500 shadow-xs">
+                          <Eye size={12} /> REVISAR
+                        </span>
+                      )}
+                    </p>
                     <p className="font-bold text-rose-600 text-sm">{desc}</p>
                   </div>
                   {/* Badge Estado */}

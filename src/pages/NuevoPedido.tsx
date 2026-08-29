@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, RotateCcw } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Eye } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Cliente, CategoriaPedido } from '../types/database.types';
 import { FABRICANTES_POR_CATEGORIA } from '../constants/fabricantes';
 import { TALLAS_NOVADRIMA_NINO, TALLAS_ANA_ROSILLO_NINA, TALLAS_ANAVIG_NINA } from '../constants/tallas';
 import { obtenerConfiguracionCampana } from '../config/campanas';
+import { recalcularPedidoPrincipal } from '../utils/pedidos';
 
 export function NuevoPedido() {
   const navigate = useNavigate();
@@ -20,6 +21,8 @@ export function NuevoPedido() {
 
   const [nuevoCliente, setNuevoCliente] = useState({ apellidos: '', nombre: '', telefono: '', telefono2: '', contacto2: '', direccion: '' });
   const [sugerenciasClientes, setSugerenciasClientes] = useState<Cliente[]>([]);
+  const sugerenciasBaseRef = useRef<Cliente[]>([]);
+  const busquedaAgotadaRef = useRef<boolean>(false);
   const [buscandoSugerencias, setBuscandoSugerencias] = useState(false);
   const [pedidosActivosCliente, setPedidosActivosCliente] = useState<any[]>([]);
   const [pedidoPrincipalId, setPedidoPrincipalId] = useState<string>('');
@@ -31,6 +34,7 @@ export function NuevoPedido() {
 
   const [pedido, setPedido] = useState({
     descripcion: '',
+    requiere_revision: false,
     categoria: getInitialCategoria(),
     tipo_articulo: (getInitialCategoria() === 'COMUNION' ? 'NINA' : 'SENORA') as 'NINA' | 'SENORA' | 'NINO' | null,
     estilo_comunion: 'Calle' as 'Calle' | 'Marinero' | 'Almirante' | null,
@@ -153,9 +157,7 @@ export function NuevoPedido() {
     if (pId) {
       setPedido(prev => ({
         ...prev,
-        precioTraje: '0',
-        entrega_cuenta: '0',
-        cargosExtra: []
+        entrega_cuenta: '0'
       }));
     }
   };
@@ -190,56 +192,138 @@ export function NuevoPedido() {
   useEffect(() => {
     const termApellidos = nuevoCliente.apellidos.trim();
     const termNombre = nuevoCliente.nombre.trim();
+    const lenA = termApellidos.length;
+    const lenN = termNombre.length;
 
-    if (termApellidos.length < 2 && termNombre.length < 2) {
+    const filtrarLocalmente = (base: Cliente[], apellTerm: string, nomTerm: string) => {
+      const normA = apellTerm.toLowerCase();
+      const normN = nomTerm.toLowerCase();
+
+      return base.filter(c => {
+        const apell = (c.apellidos || '').toLowerCase();
+        const nom = (c.nombre || '').toLowerCase();
+
+        const matchA = !normA || apell.includes(normA) || nom.includes(normA);
+        const matchN = !normN || nom.includes(normN) || apell.includes(normN);
+
+        return matchA && matchN;
+      });
+    };
+
+    // La búsqueda requiere al menos 3 caracteres en 'apellidos'.
+    // Si no hay al menos 3 caracteres en apellido, se cancela y no se busca por nombre solo.
+    if (lenA < 3) {
+      sugerenciasBaseRef.current = [];
+      busquedaAgotadaRef.current = false;
       setSugerenciasClientes([]);
       setBuscandoSugerencias(false);
       return;
     }
 
-    setBuscandoSugerencias(true);
+    // Si ya se determinó previamente que no existen coincidencias para el apellido,
+    // bloquea por completo cualquier consulta adicional al escribir en 'nombre' o continuar tecleando.
+    if (busquedaAgotadaRef.current) {
+      setSugerenciasClientes([]);
+      setBuscandoSugerencias(false);
+      return;
+    }
 
-    const buscarSugerencias = async () => {
-      try {
-        let filterParts: string[] = [];
-        if (termApellidos.length >= 2) {
-          filterParts.push(`apellidos.ilike.%${termApellidos}%`, `nombre.ilike.%${termApellidos}%`);
-        }
-        if (termNombre.length >= 2) {
-          filterParts.push(`apellidos.ilike.%${termNombre}%`, `nombre.ilike.%${termNombre}%`);
-        }
+    // Si la longitud de apellidos está en el rango de 3 a 4 caracteres, realizamos la consulta base a Supabase
+    if (lenA >= 3 && lenA <= 4) {
+      setBuscandoSugerencias(true);
 
-        const { data, error } = await supabase
-          .from('clientes')
-          .select('*')
-          .or(filterParts.join(','))
-          .limit(5);
+      const buscarSugerencias = async () => {
+        try {
+          const filterParts: string[] = [
+            `apellidos.ilike.%${termApellidos}%`,
+            `nombre.ilike.%${termApellidos}%`
+          ];
 
-        if (!error && data) {
-          setSugerenciasClientes(data);
-        } else {
-          const term = termApellidos || termNombre;
-          const { data: data2 } = await supabase
+          const { data, error } = await supabase
             .from('clientes')
             .select('*')
-            .or(`apellidos.ilike.%${term}%,nombre.ilike.%${term}%`)
-            .limit(5);
-          if (data2) setSugerenciasClientes(data2);
-          else setSugerenciasClientes([]);
-        }
-      } catch (e) {
-        console.error('Error al buscar sugerencias:', e);
-        setSugerenciasClientes([]);
-      } finally {
-        setBuscandoSugerencias(false);
-      }
-    };
+            .or(filterParts.join(','))
+            .limit(15);
 
-    const timer = setTimeout(buscarSugerencias, 300);
-    return () => clearTimeout(timer);
+          if (!error && data && data.length > 0) {
+            sugerenciasBaseRef.current = data;
+            setSugerenciasClientes(filtrarLocalmente(data, termApellidos, termNombre));
+            busquedaAgotadaRef.current = false;
+          } else {
+            sugerenciasBaseRef.current = [];
+            setSugerenciasClientes([]);
+            busquedaAgotadaRef.current = true; // Sin resultados en apellido, bloquea futuras consultas
+          }
+        } catch (e) {
+          console.error('Error al buscar sugerencias:', e);
+          sugerenciasBaseRef.current = [];
+          setSugerenciasClientes([]);
+          busquedaAgotadaRef.current = true;
+        } finally {
+          setBuscandoSugerencias(false);
+        }
+      };
+
+      const timer = setTimeout(buscarSugerencias, 300);
+      return () => clearTimeout(timer);
+    } else if (lenA > 4) {
+      // Si la búsqueda con 3-4 caracteres dio 0 resultados, no se lanzan más consultas a Supabase
+      if (busquedaAgotadaRef.current) {
+        setSugerenciasClientes([]);
+        setBuscandoSugerencias(false);
+        return;
+      }
+
+      // Si hay resultados cargados en la caché base, se filtran exclusivamente localmente
+      if (sugerenciasBaseRef.current.length > 0) {
+        const filtradas = filtrarLocalmente(sugerenciasBaseRef.current, termApellidos, termNombre);
+        setSugerenciasClientes(filtradas);
+        setBuscandoSugerencias(false);
+      } else {
+        // Fallback para pegados directos (> 4 caracteres) en apellidos sin pasar por 3-4 caracteres
+        setBuscandoSugerencias(true);
+        const buscarSugerenciasFallback = async () => {
+          try {
+            const prefA = termApellidos.slice(0, 4);
+            const filterParts: string[] = [
+              `apellidos.ilike.%${prefA}%`,
+              `nombre.ilike.%${prefA}%`
+            ];
+
+            const { data } = await supabase
+              .from('clientes')
+              .select('*')
+              .or(filterParts.join(','))
+              .limit(15);
+
+            if (data && data.length > 0) {
+              sugerenciasBaseRef.current = data;
+              setSugerenciasClientes(filtrarLocalmente(data, termApellidos, termNombre));
+              busquedaAgotadaRef.current = false;
+            } else {
+              sugerenciasBaseRef.current = [];
+              setSugerenciasClientes([]);
+              busquedaAgotadaRef.current = true;
+            }
+          } catch (e) {
+            console.error('Error al buscar sugerencias:', e);
+            sugerenciasBaseRef.current = [];
+            setSugerenciasClientes([]);
+            busquedaAgotadaRef.current = true;
+          } finally {
+            setBuscandoSugerencias(false);
+          }
+        };
+
+        const timer = setTimeout(buscarSugerenciasFallback, 300);
+        return () => clearTimeout(timer);
+      }
+    }
   }, [nuevoCliente.apellidos, nuevoCliente.nombre]);
 
   const seleccionarCliente = (c: Cliente) => {
+    sugerenciasBaseRef.current = [];
+    busquedaAgotadaRef.current = false;
     setClienteSeleccionado(c);
     setBusqueda(c.nombre + ' ' + c.apellidos);
     setClientes([]);
@@ -324,6 +408,7 @@ export function NuevoPedido() {
 
       let medidasPayload: any = {
         modelo: pedido.descripcion,
+        requiere_revision: pedido.requiere_revision,
         tipo_articulo: pedido.categoria === 'FLAMENCA' ? pedido.tipo_articulo : null,
         numTejidos: config.soportaTejidos ? pedido.numTejidos : null,
         tejido1: config.soportaTejidos ? pedido.tejido1 : '',
@@ -332,8 +417,8 @@ export function NuevoPedido() {
         tejidoCancan: config.soportaTejidos ? pedido.tejidoCancan : '',
         colorCordoncillo: config.soportaTejidos ? pedido.colorCordoncillo : '',
         observaciones: pedido.observaciones,
-        precioTraje: pedidoPrincipalId ? '0' : pedido.precioTraje,
-        cargosExtra: pedidoPrincipalId ? [] : pedido.cargosExtra
+        precioTraje: pedido.precioTraje,
+        cargosExtra: pedido.cargosExtra
       };
 
       if (isNovadrima) {
@@ -388,6 +473,7 @@ export function NuevoPedido() {
         fabricante: pedido.fabricante,
         estilo_comunion: isNovadrima ? pedido.estilo_comunion : null,
         fecha_pedido: pedido.fecha_pedido, 
+        requiere_revision: pedido.requiere_revision,
         medidas: medidasPayload,
         detalles_tejido: (pedido.categoria === 'FLAMENCA' ? '[' + pedido.tipo_articulo + '] ' : '') + (pedido.descripcion ? 'Modelo: ' + pedido.descripcion : '') + (tejidosStr ? ' | ' + tejidosStr : '') + (pedido.observaciones ? ' | ' + pedido.observaciones : ''), 
         precio_total: pedidoPrincipalId ? 0 : calcularPrecioTotal(),
@@ -402,6 +488,10 @@ export function NuevoPedido() {
         errO = res.error;
       }
       if (errO) throw errO;
+
+      if (pedidoPrincipalId) {
+        await recalcularPedidoPrincipal(pedidoPrincipalId);
+      }
 
       const entrega = pedidoPrincipalId ? 0 : parseFloat(pedido.entrega_cuenta);
       if (entrega > 0) {
@@ -571,6 +661,7 @@ export function NuevoPedido() {
     setPedidoPrincipalId('');
     setPedido({
       descripcion: '',
+      requiere_revision: false,
       categoria: 'FLAMENCA' as CategoriaPedido,
       tipo_articulo: 'SENORA' as 'NINA' | 'SENORA' | 'NINO' | null,
       estilo_comunion: 'Calle' as 'Calle' | 'Marinero' | 'Almirante' | null,
@@ -603,7 +694,6 @@ export function NuevoPedido() {
     });
   };
   const calcularPrecioTotal = () => {
-    if (pedidoPrincipalId) return 0;
     let total = parseFloat(pedido.precioTraje) || 0;
 
     for (const comp of config.complementos || []) {
@@ -1039,6 +1129,19 @@ export function NuevoPedido() {
                 {(clienteSeleccionado?.telefono2 || nuevoCliente.telefono2) && ` | Tel 2: ${clienteSeleccionado ? clienteSeleccionado.telefono2 : nuevoCliente.telefono2}${(clienteSeleccionado?.contacto2 || nuevoCliente.contacto2) ? ` (${clienteSeleccionado ? clienteSeleccionado.contacto2 : nuevoCliente.contacto2})` : ''}`}
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setPedido(prev => ({ ...prev, requiere_revision: !prev.requiere_revision }))}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-xs sm:text-sm border transition-all cursor-pointer shadow-xs ${
+                pedido.requiere_revision
+                  ? 'bg-amber-400 text-amber-950 border-amber-500 hover:bg-amber-500 animate-pulse'
+                  : 'bg-gray-800 text-gray-200 border-gray-700 hover:bg-gray-700'
+              }`}
+              title="Marcar / Desmarcar Requiere Revisión"
+            >
+              <Eye size={18} />
+              <span>{pedido.requiere_revision ? 'Requiere Revisión' : 'Marcar Revisión'}</span>
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
@@ -1209,7 +1312,7 @@ export function NuevoPedido() {
                 </select>
                 {pedidoPrincipalId && (
                   <p className="text-xs font-semibold text-amber-800">
-                    ⓘ Al vincular este pedido a un pedido anterior, el precio se establece en 0 € y el saldo se gestiona en el pedido principal seleccionado.
+                    ⓘ Al vincular este pedido a un pedido principal, su importe total ({calcularPrecioTotal().toFixed(2)} €) se sumará e incorporará automáticamente al pedido principal seleccionado.
                   </p>
                 )}
               </div>
@@ -1222,9 +1325,8 @@ export function NuevoPedido() {
                   type="number"
                   step="0.01"
                   inputMode="decimal"
-                  disabled={!!pedidoPrincipalId}
-                  className={`w-full p-3 border rounded-lg outline-none text-lg font-semibold ${pedidoPrincipalId ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
-                  value={pedidoPrincipalId ? '0' : pedido.precioTraje}
+                  className="w-full p-3 border rounded-lg outline-none text-lg font-semibold"
+                  value={pedido.precioTraje}
                   onChange={e => setPedido({...pedido, precioTraje: e.target.value})}
                 />
               </div>
@@ -1243,7 +1345,7 @@ export function NuevoPedido() {
             </div>
 
             {/* Desglose de complementos seleccionados */}
-            {!pedidoPrincipalId && config.complementos && config.complementos.length > 0 && (
+            {config.complementos && config.complementos.length > 0 && (
               <div className="pt-2 border-t border-gray-200 space-y-1.5">
                 <span className="block text-xs font-bold text-gray-500 uppercase">Complementos Seleccionados:</span>
                 {config.complementos.map(c => {
@@ -1276,8 +1378,7 @@ export function NuevoPedido() {
             )}
 
             {/* Cargos Adicionales */}
-            {!pedidoPrincipalId && (
-              <div className="space-y-2 pt-2 border-t border-gray-200">
+            <div className="space-y-2 pt-2 border-t border-gray-200">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-gray-600 uppercase">Cargos Adicionales (Mantoncillo, etc.)</span>
                   <button
@@ -1327,7 +1428,6 @@ export function NuevoPedido() {
                   </div>
                 ))}
               </div>
-            )}
 
             <div className="pt-3 border-t border-gray-200 space-y-2">
               <div className="flex justify-between items-center text-sm font-semibold text-gray-700">

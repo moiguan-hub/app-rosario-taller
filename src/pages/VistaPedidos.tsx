@@ -7,6 +7,7 @@ import { FABRICANTES_POR_CATEGORIA } from '../constants/fabricantes';
 import { TALLAS_NOVADRIMA_NINO, TALLAS_ANA_ROSILLO_NINA, TALLAS_ANAVIG_NINA } from '../constants/tallas';
 
 import { obtenerConfiguracionCampana, isComunionNinaRosilloAnavig } from '../config/campanas';
+import { recalcularPedidoPrincipal, calcularCosteIndividualPedido } from '../utils/pedidos';
 
 export function VistaPedidos() {
   const navigate = useNavigate();
@@ -399,6 +400,21 @@ export function VistaPedidos() {
       };
       setPedidoSeleccionado(pNew);
       setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
+
+      const targetMainId = pedidoSeleccionado.pedido_principal_id || pedidoSeleccionado.id;
+      if (targetMainId) {
+        await recalcularPedidoPrincipal(targetMainId);
+        const cId = pedidoSeleccionado.cliente_id;
+        if (cId) {
+          const { data: refreshedP } = await supabase.from('pedidos').select('*').eq('cliente_id', cId).order('created_at', { ascending: false });
+          if (refreshedP) {
+            setPedidos(refreshedP);
+            const updatedSel = refreshedP.find(p => p.id === pedidoSeleccionado.id);
+            if (updatedSel) setPedidoSeleccionado(updatedSel);
+          }
+        }
+      }
+
       setIsEditing(false);
       alert("Cambios guardados con éxito.");
     } else alert('Error: ' + error.message);
@@ -844,15 +860,46 @@ export function VistaPedidos() {
 
   const cambiarVinculacionPedido = async (nuevoIdSeleccionado: string) => {
     if (!pedidoSeleccionado) return;
+    const oldMainId = pedidoSeleccionado.pedido_principal_id;
     const nuevoId = nuevoIdSeleccionado || null;
-    const pNew: Pedido = { ...pedidoSeleccionado, pedido_principal_id: nuevoId };
+
+    let nuevoPrecioTotal = pedidoSeleccionado.precio_total;
+    if (!nuevoId) {
+      // Al desvincular, se calcula de forma transparente su propio precio total
+      nuevoPrecioTotal = calcularCosteIndividualPedido(pedidoSeleccionado);
+    } else {
+      // Al vincular como secundario, el cobro directo de este pedido es 0
+      nuevoPrecioTotal = 0;
+    }
+
+    const pNew: Pedido = {
+      ...pedidoSeleccionado,
+      pedido_principal_id: nuevoId,
+      precio_total: nuevoPrecioTotal
+    };
     setPedidoSeleccionado(pNew);
     setPedidos(pedidos.map(p => p.id === pNew.id ? pNew : p));
 
     await supabase
       .from('pedidos')
-      .update({ pedido_principal_id: nuevoId })
+      .update({
+        pedido_principal_id: nuevoId,
+        precio_total: nuevoPrecioTotal
+      })
       .eq('id', pedidoSeleccionado.id);
+
+    if (oldMainId) await recalcularPedidoPrincipal(oldMainId);
+    if (nuevoId) await recalcularPedidoPrincipal(nuevoId);
+
+    const cId = pedidoSeleccionado.cliente_id;
+    if (cId) {
+      const { data: refreshedP } = await supabase.from('pedidos').select('*').eq('cliente_id', cId).order('created_at', { ascending: false });
+      if (refreshedP) {
+        setPedidos(refreshedP);
+        const updatedSel = refreshedP.find(p => p.id === pedidoSeleccionado.id);
+        if (updatedSel) setPedidoSeleccionado(updatedSel);
+      }
+    }
   };
 
   const cambiarPedidoPestana = async (p: Pedido) => {
@@ -1339,7 +1386,8 @@ export function VistaPedidos() {
                 <div className="space-y-3">
                   {clientesConPedidos.map(({ cliente: c, pedidos: pList }) => {
                     const cId = c.id || pList[0]?.cliente_id;
-                    const isExpanded = clienteExpandidoId === cId;
+                    const esUnico = pList.length === 1;
+                    const isExpanded = esUnico || clienteExpandidoId === cId;
                     const nombreCompleto = c.nombre_completo || (c.apellidos ? `${capitalize(c.apellidos)}, ${capitalize(c.nombre)}` : capitalize(c.nombre) || 'Cliente');
                     const cliente = {
                       ...c,
@@ -1347,11 +1395,20 @@ export function VistaPedidos() {
                       total_pedidos: pList.length,
                     };
 
+                    const clienteTieneRevision = pList.some(p => p.requiere_revision || p.medidas?.requiere_revision);
                     return (
                       <div key={cId} className="rounded-2xl transition-all">
                         <div
-                          onClick={() => setClienteExpandidoId(isExpanded ? null : cId)}
-                          className="flex flex-col gap-2 p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm w-full text-left cursor-pointer hover:bg-gray-50/80 transition-colors"
+                          onClick={() => {
+                            if (!esUnico) {
+                              setClienteExpandidoId(clienteExpandidoId === cId ? null : cId);
+                            } else if (pList[0]) {
+                              seleccionarPedidoDirecto(pList[0]);
+                            }
+                          }}
+                          className={`flex flex-col gap-2 p-3.5 bg-white rounded-2xl border-2 shadow-sm w-full text-left cursor-pointer transition-all ${
+                            clienteTieneRevision ? 'border-red-500 animate-pulse shadow-red-100' : 'border-gray-100 hover:bg-gray-50/80'
+                          }`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <h3 className="font-bold text-gray-900 text-base sm:text-lg leading-tight break-words">{cliente.nombre_completo}</h3>
@@ -1365,68 +1422,76 @@ export function VistaPedidos() {
                                 className={`text-xs font-bold px-2.5 py-0.5 rounded-full transition-colors ${
                                   cliente.total_pedidos > 1
                                     ? 'bg-purple-100 text-purple-900 border border-purple-300 font-extrabold shadow-sm'
-                                    : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
                                 }`}
                               >
                                 {cliente.total_pedidos} {cliente.total_pedidos === 1 ? 'Pedido' : 'Pedidos'}
                               </span>
-                              <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                              {!esUnico && (
+                                <span className="text-gray-400 text-xs font-bold">{clienteExpandidoId === cId ? '▲' : '▼'}</span>
+                              )}
                             </div>
                           </div>
 
-                          <div className="pt-2 border-t border-gray-100 flex flex-col gap-1">
-                            {pList.map((p, idx) => {
-                              const fab = p.fabricante || 'Sin especificar';
-                              const rawModelo = p.medidas?.modelo || p.descripcion || (p.detalles_tejido ? p.detalles_tejido.split(' | ')[0] : '') || '';
-                              const modelo = rawModelo
-                                .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*\[(SENORA|NINA)\]\s*/i, '')
-                                .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*/i, '')
-                                .replace(/^\[(SENORA|NINA)\]\s*/i, '')
-                                .replace(/^Modelo:\s*/i, '')
-                                .trim() || 'Sin modelo';
+                          {!esUnico && (
+                            <div className="pt-2 border-t border-gray-100 flex flex-col gap-1">
+                              {pList.map((p, idx) => {
+                                const fab = p.fabricante || 'Sin especificar';
+                                const rawModelo = p.medidas?.modelo || p.descripcion || (p.detalles_tejido ? p.detalles_tejido.split(' | ')[0] : '') || '';
+                                const modelo = rawModelo
+                                  .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*\[(SENORA|NINA)\]\s*/i, '')
+                                  .replace(/^\[(SENORA|NINA)\]\s*Modelo:\s*/i, '')
+                                  .replace(/^\[(SENORA|NINA)\]\s*/i, '')
+                                  .replace(/^Modelo:\s*/i, '')
+                                  .trim() || 'Sin modelo';
 
-                              const tallaVal = p.medidas?.talla;
-                              const talla = tallaVal && tallaVal !== '-' ? (tallaVal === 'TEspecial' ? 'TEsp' : tallaVal) : null;
+                                const tallaVal = p.medidas?.talla;
+                                const talla = tallaVal && tallaVal !== '-' ? (tallaVal === 'TEspecial' ? 'TEsp' : tallaVal) : null;
 
-                              return (
-                                <div key={p.id || idx} className="text-sm sm:text-base font-semibold text-gray-800 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                  <span className="font-extrabold text-gray-900">{fab}</span>
-                                  <span className="text-gray-300 font-normal">•</span>
-                                  <span className="text-gray-700 font-medium">{modelo}</span>
-                                  {talla && (
-                                    <>
-                                      <span className="text-gray-300 font-normal">•</span>
-                                      <span className="text-rose-700 font-bold">Talla: {talla}</span>
-                                    </>
-                                  )}
-                                  {!p.pedido_principal_id && pList.length > 1 && (
-                                    <span className="text-[10px] bg-amber-100 text-amber-900 font-black px-1.5 py-0.5 rounded-full border border-amber-300 ml-1">
-                                      Principal
-                                    </span>
-                                  )}
-                                  {(p.requiere_revision || p.medidas?.requiere_revision) && (
-                                    <span className="text-[10px] bg-amber-400 text-amber-950 font-black px-1.5 py-0.5 rounded-full border border-amber-500 ml-1 inline-flex items-center gap-0.5">
-                                      <Eye size={10} /> Revisar
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
+                                return (
+                                  <div key={p.id || idx} className="text-sm sm:text-base font-semibold text-gray-800 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                    <span className="font-extrabold text-gray-900">{fab}</span>
+                                    <span className="text-gray-300 font-normal">•</span>
+                                    <span className="text-gray-700 font-medium">{modelo}</span>
+                                    {talla && (
+                                      <>
+                                        <span className="text-gray-300 font-normal">•</span>
+                                        <span className="text-rose-700 font-bold">Talla: {talla}</span>
+                                      </>
+                                    )}
+                                    {!p.pedido_principal_id && pList.length > 1 && (
+                                      <span className="text-[10px] bg-amber-100 text-amber-900 font-black px-1.5 py-0.5 rounded-full border border-amber-300 ml-1">
+                                        Principal
+                                      </span>
+                                    )}
+                                    {(p.requiere_revision || p.medidas?.requiere_revision) && (
+                                      <span className="text-[10px] bg-amber-400 text-amber-950 font-black px-1.5 py-0.5 rounded-full border border-amber-500 ml-1 inline-flex items-center gap-0.5">
+                                        <Eye size={10} /> Revisar
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
 
                         {isExpanded && (
                           <div className="bg-gray-50/50 p-3 border-t border-gray-100 space-y-2">
-                            {pList.map(p => (
-                              <div
-                                key={p.id}
-                                onClick={() => seleccionarPedidoDirecto(p)}
-                                className={`p-3 rounded-xl cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between shadow-xs transition-all gap-2 ${
-                                  !p.pedido_principal_id
-                                    ? 'border-2 border-amber-300 bg-amber-50/30'
-                                    : 'border border-gray-200 bg-white hover:border-rose-400'
-                                }`}
-                              >
+                            {pList.map(p => {
+                              const reqRev = !!(p.requiere_revision || p.medidas?.requiere_revision);
+                              return (
+                                <div
+                                  key={p.id}
+                                  onClick={() => seleccionarPedidoDirecto(p)}
+                                  className={`p-3 rounded-xl cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between shadow-xs transition-all gap-2 ${
+                                    reqRev
+                                      ? 'border-2 border-red-500 animate-pulse bg-red-50/30 shadow-red-100'
+                                      : !p.pedido_principal_id
+                                        ? 'border-2 border-amber-300 bg-amber-50/30'
+                                        : 'border border-gray-200 bg-white hover:border-rose-400'
+                                  }`}
+                                >
                                 <div className="flex items-start gap-2.5 min-w-0">
                                   <FileText className="text-rose-500 shrink-0 mt-0.5" size={20} />
                                   <div className="min-w-0">
@@ -1467,7 +1532,8 @@ export function VistaPedidos() {
                                   )}
                                 </div>
                               </div>
-                            ))}
+                            );
+                          })}
                           </div>
                         )}
                       </div>
@@ -1488,14 +1554,20 @@ export function VistaPedidos() {
             {pedidos.length === 0 ? (
               <p className="text-center text-gray-500">Sin pedidos.</p>
             ) : (
-              pedidos.map(p => (
-                <div
-                  key={p.id}
-                  onClick={() => seleccionarPedido(p)}
-                  className={`p-4 rounded-xl hover:border-rose-300 cursor-pointer flex items-start shadow-sm ${
-                    !p.pedido_principal_id ? 'border-2 border-amber-300 bg-amber-50/30' : 'border-2 border-gray-100 bg-white'
-                  }`}
-                >
+              pedidos.map(p => {
+                const reqRev = !!(p.requiere_revision || p.medidas?.requiere_revision);
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => seleccionarPedido(p)}
+                    className={`p-4 rounded-xl cursor-pointer flex items-start shadow-sm transition-all ${
+                      reqRev
+                        ? 'border-2 border-red-500 animate-pulse bg-red-50/20 shadow-red-100'
+                        : !p.pedido_principal_id
+                          ? 'border-2 border-amber-300 bg-amber-50/30 hover:border-rose-300'
+                          : 'border-2 border-gray-100 bg-white hover:border-rose-300'
+                    }`}
+                  >
                   <FileText className="text-rose-400 mr-3 flex-shrink-0 mt-1" size={28} />
                   <div className="flex-1 w-full min-w-0">
                     <p className="font-bold text-gray-800 text-lg">{p.categoria}</p>
@@ -1525,8 +1597,8 @@ export function VistaPedidos() {
                     </div>
                   </div>
                 </div>
-              ))
-            )}
+              );
+            }))}
           </div>
         </div>
       )}
@@ -1700,28 +1772,39 @@ export function VistaPedidos() {
                       </select>
                     </div>
                     {pedidoSeleccionado.pedido_principal_id && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          let mainOrder = pedidos.find(p => p.id === pedidoSeleccionado.pedido_principal_id);
-                          if (!mainOrder) {
-                            const { data } = await supabase.from('pedidos').select('*').eq('id', pedidoSeleccionado.pedido_principal_id).single();
-                            if (data) mainOrder = data as Pedido;
-                          }
-                          if (mainOrder) {
-                            setPedidoSeleccionado(mainOrder);
-                            const { data: payData } = await supabase.from('pagos').select('*').eq('pedido_id', mainOrder.id).order('fecha', { ascending: true });
-                            setPagos(payData || []);
-                            setIsEditing(false);
-                          }
-                        }}
-                        className="inline-flex items-center text-xs sm:text-sm font-bold px-3.5 py-1.5 bg-amber-100 text-amber-900 hover:bg-amber-200 transition-colors rounded-xl shadow-sm border border-amber-300 cursor-pointer gap-1"
-                        title="Ir al pedido principal"
-                      >
-                        <Ticket size={16} className="text-amber-700 shrink-0" />
-                        <span>Cobro vinculado a: <strong className="underline font-black">{pedidoPrincipal ? (getDesc(pedidoPrincipal) || `Pedido #${pedidoPrincipal.id.slice(0,6)}`) : 'Pedido principal'}</strong></span>
-                        <ArrowRight size={16} className="text-amber-700 shrink-0" />
-                      </button>
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            let mainOrder = pedidos.find(p => p.id === pedidoSeleccionado.pedido_principal_id);
+                            if (!mainOrder) {
+                              const { data } = await supabase.from('pedidos').select('*').eq('id', pedidoSeleccionado.pedido_principal_id).single();
+                              if (data) mainOrder = data as Pedido;
+                            }
+                            if (mainOrder) {
+                              setPedidoSeleccionado(mainOrder);
+                              const { data: payData } = await supabase.from('pagos').select('*').eq('pedido_id', mainOrder.id).order('fecha', { ascending: true });
+                              setPagos(payData || []);
+                              setIsEditing(false);
+                            }
+                          }}
+                          className="inline-flex items-center text-xs sm:text-sm font-bold px-3.5 py-1.5 bg-amber-100 text-amber-900 hover:bg-amber-200 transition-colors rounded-xl shadow-sm border border-amber-300 cursor-pointer gap-1"
+                          title="Ir al pedido principal"
+                        >
+                          <Ticket size={16} className="text-amber-700 shrink-0" />
+                          <span>Cobro vinculado a: <strong className="underline font-black">{pedidoPrincipal ? (getDesc(pedidoPrincipal) || `Pedido #${pedidoPrincipal.id.slice(0,6)}`) : 'Pedido principal'}</strong></span>
+                          <ArrowRight size={16} className="text-amber-700 shrink-0" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cambiarVinculacionPedido('')}
+                          className="inline-flex items-center text-xs sm:text-sm font-bold px-3 py-1.5 bg-rose-100 text-rose-900 hover:bg-rose-200 transition-colors rounded-xl shadow-sm border border-rose-300 cursor-pointer gap-1"
+                          title="Desvincular del pedido principal"
+                        >
+                          <X size={16} className="text-rose-700 shrink-0" />
+                          <span>Desvincular del pedido principal</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </>
@@ -1900,26 +1983,36 @@ export function VistaPedidos() {
                 <p className="text-xs text-amber-900 font-medium leading-relaxed">
                   Este pedido está vinculado a un pedido anterior. El cobro y saldo de este encargo se gestionan de forma unificada en el pedido principal.
                 </p>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    let mainOrder = pedidos.find(p => p.id === pedidoSeleccionado.pedido_principal_id);
-                    if (!mainOrder) {
-                      const { data } = await supabase.from('pedidos').select('*').eq('id', pedidoSeleccionado.pedido_principal_id).single();
-                      if (data) mainOrder = data as Pedido;
-                    }
-                    if (mainOrder) {
-                      setPedidoSeleccionado(mainOrder);
-                      const { data: payData } = await supabase.from('pagos').select('*').eq('pedido_id', mainOrder.id).order('fecha', { ascending: true });
-                      setPagos(payData || []);
-                      setIsEditing(false);
-                    }
-                  }}
-                  className="inline-flex items-center justify-center px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm cursor-pointer gap-1.5"
-                >
-                  <span>Ir al Pedido Principal</span>
-                  <ArrowRight size={16} />
-                </button>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      let mainOrder = pedidos.find(p => p.id === pedidoSeleccionado.pedido_principal_id);
+                      if (!mainOrder) {
+                        const { data } = await supabase.from('pedidos').select('*').eq('id', pedidoSeleccionado.pedido_principal_id).single();
+                        if (data) mainOrder = data as Pedido;
+                      }
+                      if (mainOrder) {
+                        setPedidoSeleccionado(mainOrder);
+                        const { data: payData } = await supabase.from('pagos').select('*').eq('pedido_id', mainOrder.id).order('fecha', { ascending: true });
+                        setPagos(payData || []);
+                        setIsEditing(false);
+                      }
+                    }}
+                    className="inline-flex items-center justify-center px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm cursor-pointer gap-1.5"
+                  >
+                    <span>Ir al Pedido Principal</span>
+                    <ArrowRight size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cambiarVinculacionPedido('')}
+                    className="inline-flex items-center justify-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm cursor-pointer gap-1.5"
+                  >
+                    <X size={16} />
+                    <span>Desvincular del Pedido Principal</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <>
